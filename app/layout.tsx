@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { SessionProvider } from './components/SessionProvider'
 import { ThemeController } from './components/ThemeController'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 
 export const metadata: Metadata = {
   title: 'docrud',
@@ -20,6 +21,7 @@ export default function RootLayout({
           <ThemeController />
           {children}
         </SessionProvider>
+        <SpeedInsights />
       </body>
     </html>
   )
