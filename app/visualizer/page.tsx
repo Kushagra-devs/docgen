@@ -2,6 +2,8 @@ import PublicVisualizerPage from '@/components/PublicVisualizerPage';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Visualizer | Turn Data Into Clear Charts & Insights with Docrud',
   description:

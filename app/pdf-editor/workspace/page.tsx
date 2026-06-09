@@ -2,6 +2,8 @@ import PublicPdfEditorWorkspacePage from '@/components/PublicPdfEditorWorkspaceP
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'PDF Editor Workspace | Docrud',
   description:

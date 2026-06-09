@@ -3,6 +3,8 @@ import PublicTalentDirectoryPage from '@/components/PublicTalentDirectoryPage';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Talent Directory | Publish Your Resume and Get Found',
   description:

@@ -2,6 +2,8 @@ import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 import { buildPageMetadata } from '@/lib/seo';
 import PublicTransferPage from '@/components/PublicTransferPage';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Secure File Transfers | Share Files with Passwords, Links & QR',
   description:

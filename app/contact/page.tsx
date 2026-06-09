@@ -1,9 +1,11 @@
-import { Mail, Phone } from 'lucide-react';
+﻿import { Mail, Phone } from 'lucide-react';
 import PublicSiteChrome from '@/components/PublicSiteChrome';
 import InquiryForm from '@/components/InquiryForm';
 import { Card, CardContent } from '@/components/ui/card';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = buildPageMetadata({
   title: 'Contact Docrud | Sales, Product Questions & Support',

@@ -2,6 +2,8 @@ import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 import { buildPageMetadata } from '@/lib/seo';
 import PublicEncrypterPage from '@/components/PublicEncrypterPage';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Document Encrypter | Protect Sensitive Files with Docrud',
   description:

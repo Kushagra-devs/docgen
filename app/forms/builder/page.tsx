@@ -2,6 +2,8 @@ import PublicFormsBuilderPage from '@/components/PublicFormsBuilderPage';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Forms Builder Workspace | Docrud',
   description:

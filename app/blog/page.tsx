@@ -3,6 +3,8 @@ import { buildPageMetadata } from '@/lib/seo';
 import { getBlogCategories, getPublicBlogPosts } from '@/lib/server/blog';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Docrud Blog | Product Notes, Workflow Ideas, AI Writing & Secure Collaboration',
   description:

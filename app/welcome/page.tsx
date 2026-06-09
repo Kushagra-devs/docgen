@@ -1,4 +1,4 @@
-import Link from 'next/link';
+﻿import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,8 @@ import PublicSiteChrome from '@/components/PublicSiteChrome';
 import { getAuthSession } from '@/lib/server/auth';
 import { getSaasPlanById } from '@/lib/server/saas';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
+
+export const dynamic = 'force-dynamic';
 
 type WelcomePageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;

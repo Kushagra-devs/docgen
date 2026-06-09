@@ -1,5 +1,7 @@
-import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
+﻿import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 import PublicUpcomingFeaturesPage from '@/components/PublicUpcomingFeaturesPage';
+
+export const dynamic = 'force-dynamic';
 
 export default async function UpcomingFeaturesPage() {
   const [landingSettings, themeSettings] = await Promise.all([

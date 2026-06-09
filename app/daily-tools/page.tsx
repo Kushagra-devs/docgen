@@ -1,7 +1,9 @@
-import DailyToolsCenter from '@/components/DailyToolsCenter';
+﻿import DailyToolsCenter from '@/components/DailyToolsCenter';
 import PublicSiteChrome from '@/components/PublicSiteChrome';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = buildPageMetadata({
   title: 'Daily Tools | Free Everyday Document & Utility Tools | Docrud',

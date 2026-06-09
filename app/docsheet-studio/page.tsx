@@ -1,5 +1,7 @@
-import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
+﻿import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 import PublicDocSheetPage from '@/components/PublicDocSheetPage';
+
+export const dynamic = 'force-dynamic';
 
 export default async function DocSheetStudioPublicPage() {
   const [landingSettings, themeSettings] = await Promise.all([

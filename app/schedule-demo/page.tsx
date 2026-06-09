@@ -5,6 +5,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Schedule a Demo | Docrud',
   description:

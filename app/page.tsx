@@ -1,12 +1,14 @@
-import { redirect } from 'next/navigation';
+﻿import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import dynamic from 'next/dynamic';
+import NextDynamic from 'next/dynamic';
 import { buildPageMetadata } from '@/lib/seo';
 import { getThemeSettings } from '@/lib/server/settings';
 import { getAuthSession } from '@/lib/server/auth';
 
+export const dynamic = 'force-dynamic';
+
 // Client-only: avoids SSR/hydration mismatches from auth-conditional rendering
-const PublicHomepage = dynamic(() => import('@/components/PublicHomepage'), {
+const PublicHomepage = NextDynamic(() => import('@/components/PublicHomepage'), {
   ssr: false,
   loading: () => <div className="h-screen w-full bg-[#0D0D0F]" />,
 });

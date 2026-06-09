@@ -1,10 +1,12 @@
-import { redirect } from 'next/navigation';
+﻿import { redirect } from 'next/navigation';
 import CheckoutExperience from '@/components/CheckoutExperience';
 import PublicSiteChrome from '@/components/PublicSiteChrome';
 import { decodeCustomPlanConfiguration } from '@/lib/pricing-config';
 import { getAuthSession } from '@/lib/server/auth';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 import { getSaasPlanById } from '@/lib/server/saas';
+
+export const dynamic = 'force-dynamic';
 
 type CheckoutPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;

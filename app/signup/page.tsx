@@ -4,6 +4,8 @@ import DarkModeActivator from '@/components/DarkModeActivator';
 import { buildPageMetadata } from '@/lib/seo';
 import { getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Business Signup | Create Your Docrud Workspace',
   description: 'Create a Docrud business workspace for documents, AI tools, forms, secure sharing, and team workflows.',

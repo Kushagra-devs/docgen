@@ -1,10 +1,12 @@
-import dynamic from 'next/dynamic';
+import NextDynamic from 'next/dynamic';
 import { redirect } from 'next/navigation';
 import { getAuthSession } from '@/lib/server/auth';
 import { hasInfinity } from '@/lib/server/infinity';
 import { buildPageMetadata } from '@/lib/seo';
 
-const BusinessPageCreator = dynamic(() => import('@/components/BusinessPageCreator'), { ssr: false });
+export const dynamic = 'force-dynamic';
+
+const BusinessPageCreator = NextDynamic(() => import('@/components/BusinessPageCreator'), { ssr: false });
 
 export const metadata = buildPageMetadata({
   title: 'Create Business Page | Docrud',

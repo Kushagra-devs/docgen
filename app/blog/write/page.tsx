@@ -1,6 +1,8 @@
-import BlogEditorPage from '@/components/BlogEditorPage';
+﻿import BlogEditorPage from '@/components/BlogEditorPage';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = buildPageMetadata({
   title: 'Write on Docrud Blog | Draft, Edit & Publish Posts',

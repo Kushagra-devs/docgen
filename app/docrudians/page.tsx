@@ -2,6 +2,8 @@ import PublicDocrudiansPage from '@/components/PublicDocrudiansPage';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Docrudians | Public & Private Rooms for Developers, Teams, Colleges & Events',
   description:

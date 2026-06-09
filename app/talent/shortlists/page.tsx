@@ -1,7 +1,9 @@
-import { Suspense } from 'react';
+﻿import { Suspense } from 'react';
 import PublicTalentDirectoryPage from '@/components/PublicTalentDirectoryPage';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = buildPageMetadata({
   title: 'Talent Shortlists | Saved Candidates',

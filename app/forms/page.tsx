@@ -2,6 +2,8 @@ import PublicFormsPage from '@/components/PublicFormsPage';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Forms | Docrud Form Builder, QR Forms & Response Collection',
   description:

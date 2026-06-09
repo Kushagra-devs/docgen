@@ -1,14 +1,16 @@
-import PublicSiteChrome from '@/components/PublicSiteChrome';
+﻿import PublicSiteChrome from '@/components/PublicSiteChrome';
 import PricingExperience from '@/components/PricingExperience';
 import { buildPageMetadata } from '@/lib/seo';
 import { getThemeSettings, getLandingSettings } from '@/lib/server/settings';
 import { getPublicSaasPlansByAudience } from '@/lib/server/saas';
 import { getAuthSession } from '@/lib/server/auth';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Pricing | docrud Workspace Trial, Pro & Build Your Own',
   description:
-    'Explore the docrud Workspace Trial, the ₹299/month Pro plan, and a build-your-own recurring workspace for documents, AI tools, file sharing, and secure operations.',
+    'Explore the docrud Workspace Trial, the â‚¹299/month Pro plan, and a build-your-own recurring workspace for documents, AI tools, file sharing, and secure operations.',
   path: '/pricing',
   keywords: ['docrud pricing', 'docrud workspace pro', 'document workflow pricing', 'custom workspace plan'],
 });

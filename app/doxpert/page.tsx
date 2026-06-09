@@ -1,6 +1,8 @@
-import PublicDoxpertPage from '@/components/PublicDoxpertPage';
+﻿import PublicDoxpertPage from '@/components/PublicDoxpertPage';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = buildPageMetadata({
   title: 'DoXpert AI | AI Document Review, Risk Flags & Smarter Replies',

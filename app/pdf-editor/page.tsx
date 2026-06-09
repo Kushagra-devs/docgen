@@ -2,6 +2,8 @@ import PublicPdfEditorPage from '@/components/PublicPdfEditorPage';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'PDF Editor | Edit, Convert, Clean & Export PDFs with Docrud',
   description:

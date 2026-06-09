@@ -1,6 +1,8 @@
-import { buildPageMetadata } from '@/lib/seo';
+﻿import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 import PublicTemplateMarketplacePage from '@/components/PublicTemplateMarketplacePage';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = buildPageMetadata({
   title: 'Template Marketplace | Buy and Install Templates | docrud',

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(@\\(\"docrudians\",\"forms\",\"individual-signup\",\"pdf-editor\",\"privacy-policy\",\"schedule-demo\",\"signed-document-policy\",\"signup\",\"talent\"\\) | ForEach-Object { $f = \"d:\\\\docrud_kushagra\\\\app\\\\$_\\\\page.tsx\"; $head = Get-Content $f -TotalCount 5; Write-Host \"=== $_ ===\"; $head; Write-Host \"\" })",
+      "PowerShell(@\\(\"file-directory\",\"forms/builder\",\"knowledge\",\"pdf-editor/workspace\",\"shared-document-policy\",\"terms-and-conditions\",\"visualizer\"\\) | ForEach-Object { $f = \"d:\\\\docrud_kushagra\\\\app\\\\$_\\\\page.tsx\"; $head = Get-Content $f -TotalCount 8; Write-Host \"=== $_ ===\"; $head; Write-Host \"\" })",
+      "PowerShell(@\\(\"blog\",\"document-encrypter\",\"file-transfers\",\"support\"\\) | ForEach-Object { $f = \"d:\\\\docrud_kushagra\\\\app\\\\$_\\\\page.tsx\"; $head = Get-Content $f -TotalCount 6; Write-Host \"=== $_ ===\"; $head; Write-Host \"\" })"
+    ]
+  }
+}

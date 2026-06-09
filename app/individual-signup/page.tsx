@@ -3,6 +3,8 @@ import IndividualSignupForm from '@/components/IndividualSignupForm';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = buildPageMetadata({
   title: 'Individual Signup | Create Your Docrud Profile',
   description: 'Create your Docrud individual profile to access resume tools, AI features, secure sharing, and personal workflows.',

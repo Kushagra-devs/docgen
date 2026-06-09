@@ -1,6 +1,8 @@
-import PublicResumeAtsPage from '@/components/PublicResumeAtsPage';
+﻿import PublicResumeAtsPage from '@/components/PublicResumeAtsPage';
 import { buildPageMetadata } from '@/lib/seo';
 import { getLandingSettings, getThemeSettings } from '@/lib/server/settings';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata = buildPageMetadata({
   title: 'Resume ATS Checker | Score, Improve & Generate Better Resumes',
