@@ -174,12 +174,6 @@ export async function readJsonFile<T>(filePath: string, fallback: T): Promise<T>
     if (adapter) {
       try {
         const value = await adapter.read();
-        if (Array.isArray(value) && value.length === 0) {
-          return fallback;
-        }
-        if (value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) {
-          return fallback;
-        }
         return value as T;
       } catch (error) {
         console.error(`Failed to read row adapter for ${filePath}`, error);

@@ -931,12 +931,13 @@ function TrendingPanel({
     return () => clearInterval(iv);
   }, []);
 
-  /* top news by read count */
+  /* top news by total engagement (likes + comments + trends), real items only */
   const topNews = useMemo(() => {
-    const reads = (i: PublishedItem) => parseFloat(
-      (i.stats?.find(s => s.l === 'reads')?.v ?? '0').replace(/k$/i, '000').replace(/,/g, '')
-    );
-    return allItems.filter(i => i.category === 'news').sort((a, b) => reads(b) - reads(a)).slice(0, 4);
+    const eng = (i: PublishedItem) => (i.likesCount ?? 0) + (i.commentsCount ?? 0) + (i.trendCount ?? 0);
+    return allItems
+      .filter(i => i.category === 'news' && i.isReal)
+      .sort((a, b) => eng(b) - eng(a))
+      .slice(0, 4);
   }, [allItems]);
 
   /* top trending tags */
@@ -972,17 +973,20 @@ function TrendingPanel({
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/30 mb-3">Top News</p>
           <div className="space-y-3.5">
             {topNews.length === 0 && <p className="text-[11px] text-white/20">No news yet</p>}
-            {topNews.map((item, i) => (
-              <Link key={item.id} href={`/published/${item.id}`} className="group flex items-start gap-2.5">
-                <span className="text-[11px] font-bold text-white/20 tabular-nums mt-0.5 w-4 shrink-0">{i + 1}</span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12px] font-semibold text-white/65 leading-snug line-clamp-2 group-hover:text-white transition-colors">{item.title}</p>
-                  <p className="text-[10.5px] text-white/25 mt-0.5">
-                    {item.stats?.find(s => s.l === 'reads')?.v ?? '—'} reads · {timeAgo(item.postedAt)}
-                  </p>
-                </div>
-              </Link>
-            ))}
+            {topNews.map((item, i) => {
+              const eng = (item.likesCount ?? 0) + (item.commentsCount ?? 0) + (item.trendCount ?? 0);
+              return (
+                <Link key={item.id} href={`/published/${item.shareId || item.id}`} className="group flex items-start gap-2.5">
+                  <span className="text-[11px] font-bold text-white/20 tabular-nums mt-0.5 w-4 shrink-0">{i + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-semibold text-white/65 leading-snug line-clamp-2 group-hover:text-white transition-colors">{item.title}</p>
+                    <p className="text-[10.5px] text-white/25 mt-0.5">
+                      {eng > 0 ? `${eng >= 1000 ? `${(eng / 1000).toFixed(1)}k` : eng} engagements · ` : ''}{timeAgo(item.postedAt)}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </section>
 

@@ -99,9 +99,6 @@ export function resolveFileTransferDataUrl(
 }
 
 export async function getFileTransfers(): Promise<SecureFileTransfer[]> {
-  if (getDbPool()) {
-    return selectAllFileTransferRows();
-  }
   return readJsonFile<SecureFileTransfer[]>(fileTransfersPath, []);
 }
 

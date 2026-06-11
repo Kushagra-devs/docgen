@@ -3254,9 +3254,13 @@ function OnboardingPageInner() {
           setGoError('');
           setGoPhase('paying');
           try {
-            const res = await fetch('/api/docrud-go/create-order', { method: 'POST' });
-            const data = await res.json() as { orderId?: string; amount?: number; currency?: string; keyId?: string; userName?: string; userEmail?: string; error?: string };
-            if (!res.ok || !data.orderId) {
+            const res = await fetch('/api/billing/infinity', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ period: 'annual' }),
+            });
+            const data = await res.json() as { order?: { id: string; amount: number; currency: string }; keyId?: string; customer?: { name: string; email: string }; error?: string };
+            if (!res.ok || !data.order?.id) {
               setGoError(data.error ?? 'Could not initiate payment. Please try again.');
               setGoPhase('offer');
               return;
@@ -3271,20 +3275,20 @@ function OnboardingPageInner() {
 
             const rz = new win.Razorpay({
               key: data.keyId,
-              amount: data.amount,
-              currency: data.currency || 'INR',
+              amount: data.order.amount,
+              currency: data.order.currency || 'INR',
               name: 'Docrud',
-              description: 'Infinity ∞ — Verified Professional',
-              order_id: data.orderId,
-              prefill: { name: data.userName || '', email: data.userEmail || '' },
+              description: 'Infinity ∞ — Annual Plan',
+              order_id: data.order.id,
+              prefill: { name: data.customer?.name || '', email: data.customer?.email || '' },
               theme: { color: '#6366f1' },
               modal: { backdropclose: false },
               handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
                 try {
-                  const vRes = await fetch('/api/docrud-go/verify', {
-                    method: 'POST',
+                  const vRes = await fetch('/api/billing/infinity', {
+                    method: 'PUT',
                     headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify(response),
+                    body: JSON.stringify({ ...response, period: 'annual' }),
                   });
                   const vData = await vRes.json() as { success?: boolean; error?: string };
                   if (vData.success) {
@@ -3321,8 +3325,8 @@ function OnboardingPageInner() {
                 </svg>
               </div>
               <h3 className="text-[1.3rem] font-black tracking-[-0.03em] text-white">Refer &amp; Earn Free</h3>
-              <p className="mt-1 text-[11px] text-white/38 max-w-[220px] mx-auto leading-relaxed">
-                Share your link. When a friend signs up, your <span style={{ color: '#a5b4fc' }}>Docrud Infinity ∞</span> activates — zero payment.
+              <p className="mt-1 text-[11px] text-white/38 max-w-[240px] mx-auto leading-relaxed">
+                Share your link. When someone signs up with your code, <span style={{ color: '#a5b4fc' }}>both of you get 1 month of Infinity free</span>.
               </p>
             </div>
 
@@ -3331,7 +3335,7 @@ function OnboardingPageInner() {
               {[
                 { n: '1', label: 'Share your link' },
                 { n: '2', label: 'Friend signs up' },
-                { n: '3', label: 'Infinity badge, free' },
+                { n: '3', label: '1 month Infinity free' },
               ].map(({ n, label }, i) => (
                 <div key={n} className="flex flex-col items-center gap-1.5 rounded-[12px] py-3 px-2"
                   style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.12)', animation: `obSlideUp 0.3s ${i * 0.06}s ease both` }}>
@@ -3526,10 +3530,10 @@ function OnboardingPageInner() {
                     {/* Price block */}
                     <div className="shrink-0 text-right pt-0.5">
                       <div className="flex items-baseline justify-end gap-1 mb-0.5">
-                        <span className="text-[10px] text-white/25 line-through">₹499</span>
-                        <span className="text-[26px] font-black leading-none tracking-[-0.03em]" style={{ color: '#a5b4fc' }}>₹99</span>
+                        <span className="text-[10px] text-white/25 line-through">₹3,588</span>
+                        <span className="text-[26px] font-black leading-none tracking-[-0.03em]" style={{ color: '#a5b4fc' }}>₹2,499</span>
                       </div>
-                      <span className="text-[9px] text-white/28">one-time · no renewal</span>
+                      <span className="text-[9px] text-white/28">per year · billed annually</span>
                     </div>
                   </div>
 
@@ -3647,14 +3651,14 @@ function OnboardingPageInner() {
                       style={{ background: 'linear-gradient(135deg,#4f46e5 0%,#6366f1 50%,#4f46e5 100%)', color: '#ffffff', boxShadow: '0 4px 28px rgba(99,102,241,0.50), inset 0 1px 0 rgba(255,255,255,0.15)' }}>
                       {goPhase === 'paying'
                         ? <><div className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Processing…</>
-                        : <>∞ Unlock Infinity — ₹99</>
+                        : <>∞ Unlock Infinity — ₹2,499/yr</>
                       }
                     </button>
                   </div>
 
                   {/* ── Sub-note ── */}
                   <p className="mt-2.5 text-center text-[9px] text-white/22">
-                    Secure payment · Instant activation · No renewal
+                    Secure payment · Instant activation · Renews yearly
                   </p>
                 </div>
               </div>

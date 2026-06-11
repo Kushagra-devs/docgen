@@ -2211,6 +2211,9 @@ export default function UserProfilePage() {
   const [credits, setCredits] = useState<{ balance: number; totalEarned: number; streak: { current: number; longest: number }; milestones: string[]; verified: boolean; transactions: Array<{ id: string; type: string; amount: number; reason: string; description: string; createdAt: string }> } | null>(null);
   const [analytics, setAnalytics] = useState<{ totalViews: number; totalLikes: number; totalComments: number; publishCount: number; featuredCount: number } | null>(null);
   const [billingHistory, setBillingHistory] = useState<Array<{ id: string; productLabel?: string; planName?: string; totalAmountInPaise: number; status: string; paidAt?: string; createdAt: string; invoiceNumber?: string; productType?: string }>>([]);
+  const [infinityStatus, setInfinityStatus] = useState<{ active: boolean; isExpired: boolean; purchasedAt?: string; expiresAt?: string; period?: 'monthly' | 'annual'; renewalCount?: number; grantedFree?: boolean } | null>(null);
+  const [infinityPayPhase, setInfinityPayPhase] = useState<'idle' | 'paying' | 'success'>('idle');
+  const [infinityPayError, setInfinityPayError] = useState('');
   const [publishedPosts, setPublishedPosts] = useState<Array<{ id: string; shareId: string; title?: string; fileName: string; likesCount: number; commentsCount: number; viewCount: number; featured: boolean; featuredUntil?: string; featuredPlan?: string; createdAt: string }>>([]);
   const [featurePanelPost, setFeaturePanelPost] = useState<{ id: string; title: string } | null>(null);
 
@@ -2532,6 +2535,10 @@ export default function UserProfilePage() {
     // billing history (feature_post transactions)
     fetch('/api/billing/overview').then(r => r.ok ? r.json() : null).then((d: { transactions?: typeof billingHistory } | null) => {
       if (d?.transactions) setBillingHistory(d.transactions.filter((t) => t.status === 'paid'));
+    }).catch(() => {});
+    // infinity plan status
+    fetch('/api/billing/infinity').then(r => r.ok ? r.json() : null).then((d: typeof infinityStatus | null) => {
+      if (d) setInfinityStatus(d);
     }).catch(() => {});
     // own published posts
     fetch('/api/public/published').then(r => r.ok ? r.json() : null).then((d: { items?: Array<{ id: string; shareId: string; title?: string; fileName?: string; likesCount?: number; commentsCount?: number; viewCount?: number; featured?: boolean; featuredUntil?: string; featuredPlan?: string; createdAt?: string; uploadedByUserId?: string }> } | null) => {
@@ -5230,8 +5237,252 @@ export default function UserProfilePage() {
         })()}
 
         {/* Billing tab */}
-        {tab === 'billing' && isOwnProfile && (
+        {tab === 'billing' && isOwnProfile && (() => {
+          /* ── Infinity plan helpers ── */
+          const daysLeft = infinityStatus?.active && infinityStatus.expiresAt
+            ? Math.max(0, Math.ceil((new Date(infinityStatus.expiresAt).getTime() - Date.now()) / 86_400_000))
+            : 0;
+
+          const handleInfinityPayment = async (period: 'monthly' | 'annual') => {
+            setInfinityPayError('');
+            setInfinityPayPhase('paying');
+            try {
+              const res = await fetch('/api/billing/infinity', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ period }),
+              });
+              const data = await res.json() as { order?: { id: string; amount: number; currency: string }; keyId?: string; customer?: { name: string; email: string }; error?: string };
+              if (!res.ok || !data.order?.id) {
+                setInfinityPayError(data.error ?? 'Could not initiate payment. Please try again.');
+                setInfinityPayPhase('idle');
+                return;
+              }
+              const win = window as typeof window & { Razorpay?: new (opts: Record<string, unknown>) => { open(): void } };
+              if (!win.Razorpay) {
+                setInfinityPayError('Payment gateway failed to load. Please refresh and retry.');
+                setInfinityPayPhase('idle');
+                return;
+              }
+              const rz = new win.Razorpay({
+                key: data.keyId,
+                amount: data.order.amount,
+                currency: data.order.currency || 'INR',
+                name: 'Docrud',
+                description: period === 'annual' ? 'Infinity ∞ — Annual Plan' : 'Infinity ∞ — Monthly Plan',
+                order_id: data.order.id,
+                prefill: { name: data.customer?.name || '', email: data.customer?.email || '' },
+                theme: { color: '#6366f1' },
+                modal: { backdropclose: false },
+                handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+                  try {
+                    const vRes = await fetch('/api/billing/infinity', {
+                      method: 'PUT',
+                      headers: { 'content-type': 'application/json' },
+                      body: JSON.stringify({ ...response, period }),
+                    });
+                    const vData = await vRes.json() as { success?: boolean; error?: string };
+                    if (vData.success) {
+                      setInfinityPayPhase('success');
+                      // Refresh infinity status
+                      fetch('/api/billing/infinity').then(r => r.ok ? r.json() : null).then((d: typeof infinityStatus | null) => { if (d) setInfinityStatus(d); }).catch(() => {});
+                    } else {
+                      setInfinityPayError(vData.error ?? 'Verification failed. Contact support.');
+                      setInfinityPayPhase('idle');
+                    }
+                  } catch {
+                    setInfinityPayError('Verification failed. Contact support.');
+                    setInfinityPayPhase('idle');
+                  }
+                },
+                'modal.ondismiss': () => { setInfinityPayPhase('idle'); },
+              });
+              rz.open();
+            } catch {
+              setInfinityPayError('Something went wrong. Please try again.');
+              setInfinityPayPhase('idle');
+            }
+          };
+
+          return (
           <div className="space-y-5">
+
+            {/* ── Infinity Plan Card ── */}
+            {(() => {
+              const isActive  = infinityStatus?.active === true;
+              const isExpired = infinityStatus?.isExpired === true;
+              const hasEverHad = isActive || isExpired;
+
+              if (isActive) {
+                /* ── Active plan ── */
+                const pct = infinityStatus!.expiresAt && infinityStatus!.purchasedAt
+                  ? (() => {
+                      const total = new Date(infinityStatus!.expiresAt!).getTime() - new Date(infinityStatus!.purchasedAt!).getTime();
+                      const used  = Date.now() - new Date(infinityStatus!.purchasedAt!).getTime();
+                      return Math.min(100, Math.max(0, Math.round((used / total) * 100)));
+                    })()
+                  : 0;
+                const urgency = daysLeft <= 7 ? 'rose' : daysLeft <= 14 ? 'amber' : 'indigo';
+                const barColor = urgency === 'rose' ? '#f43f5e' : urgency === 'amber' ? '#f59e0b' : '#818cf8';
+                return (
+                  <div className="rounded-[20px] overflow-hidden" style={{ background: 'linear-gradient(135deg,#0f0c2e 0%,#1a1545 50%,#0d0b25 100%)', border: '1px solid rgba(99,102,241,0.22)' }}>
+                    {/* Header stripe */}
+                    <div className="px-5 pt-5 pb-4">
+                      <div className="flex items-start justify-between gap-3 mb-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[18px] font-black tracking-[-0.03em] text-white">Infinity <span style={{ color: '#a5b4fc' }}>∞</span></span>
+                            <span className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em]" style={{ background: 'rgba(99,102,241,0.18)', color: '#a5b4fc' }}>
+                              {infinityStatus!.period === 'annual' ? 'Annual' : 'Monthly'}
+                            </span>
+                            {infinityStatus!.grantedFree && (
+                              <span className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em]" style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399' }}>Free</span>
+                            )}
+                          </div>
+                          <p className="text-[11px]" style={{ color: 'rgba(165,180,252,0.5)' }}>Active · renews {infinityStatus!.expiresAt ? new Date(infinityStatus!.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[28px] font-black leading-none tracking-[-0.04em]" style={{ color: daysLeft <= 7 ? '#f43f5e' : daysLeft <= 14 ? '#f59e0b' : '#a5b4fc' }}>{daysLeft}</p>
+                          <p className="text-[10px] mt-0.5" style={{ color: 'rgba(255,255,255,0.32)' }}>days left</p>
+                        </div>
+                      </div>
+
+                      {/* Progress bar */}
+                      <div className="mb-3 h-1.5 w-full rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
+                        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: barColor }} />
+                      </div>
+                      {daysLeft <= 14 && (
+                        <p className="text-[10.5px] mb-3" style={{ color: urgency === 'rose' ? '#f43f5e' : '#f59e0b' }}>
+                          {daysLeft <= 7 ? '⚠ Expires soon — renew to keep your benefits.' : 'Renew early to avoid any interruption.'}
+                        </p>
+                      )}
+
+                      {/* Feature list */}
+                      <div className="grid grid-cols-2 gap-2 mb-4">
+                        {[
+                          { icon: '🔍', label: '3× profile visibility' },
+                          { icon: '⚡', label: 'Premium gigs & AI tools' },
+                          { icon: '∞', label: 'Infinity verified badge' },
+                          { icon: '📄', label: 'E-Sign, DocWord & more' },
+                          { icon: '☁',  label: '5 GB Infinity Drive' },
+                          { icon: '🚀', label: 'Priority search ranking' },
+                        ].map(({ icon, label }) => (
+                          <div key={label} className="flex items-center gap-1.5 text-[10.5px]" style={{ color: 'rgba(165,180,252,0.65)' }}>
+                            <span className="text-[12px] w-4 text-center shrink-0">{icon}</span>
+                            {label}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Renew CTA */}
+                    <div className="px-5 pb-5">
+                      {infinityPayPhase === 'success' ? (
+                        <div className="rounded-[12px] py-2.5 text-center text-[12px] font-bold" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.20)' }}>
+                          ✓ Plan renewed successfully!
+                        </div>
+                      ) : (
+                        <>
+                          {infinityPayError && <p className="mb-2 text-[11px]" style={{ color: '#f43f5e' }}>{infinityPayError}</p>}
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              disabled={infinityPayPhase === 'paying'}
+                              onClick={() => void handleInfinityPayment('monthly')}
+                              className="flex-1 rounded-[12px] py-2.5 text-[12px] font-bold transition-all active:scale-[0.98] disabled:opacity-50"
+                              style={{ background: 'rgba(99,102,241,0.12)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.25)' }}
+                            >
+                              {infinityPayPhase === 'paying' ? '…' : 'Renew Monthly · ₹299'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={infinityPayPhase === 'paying'}
+                              onClick={() => void handleInfinityPayment('annual')}
+                              className="flex-1 rounded-[12px] py-2.5 text-[12px] font-bold transition-all active:scale-[0.98] disabled:opacity-50"
+                              style={{ background: 'linear-gradient(135deg,#4f46e5,#6366f1)', color: '#fff', boxShadow: '0 4px 18px rgba(99,102,241,0.35)' }}
+                            >
+                              {infinityPayPhase === 'paying' ? '…' : 'Renew Annual · ₹2,499'}
+                            </button>
+                          </div>
+                          <p className="mt-2 text-center text-[9px]" style={{ color: 'rgba(255,255,255,0.2)' }}>Renewing extends from current expiry date</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+
+              /* ── No plan / expired ── */
+              return (
+                <div className="rounded-[20px] overflow-hidden" style={{ background: 'linear-gradient(135deg,#0c0c18 0%,#111128 100%)', border: '1px solid rgba(99,102,241,0.14)' }}>
+                  <div className="px-5 pt-5 pb-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px]" style={{ background: 'rgba(99,102,241,0.10)', border: '1px solid rgba(99,102,241,0.18)' }}>
+                        <span className="text-[18px] font-black" style={{ color: '#818cf8' }}>∞</span>
+                      </div>
+                      <div>
+                        <h3 className="text-[14px] font-black text-white leading-tight">Docrud Infinity</h3>
+                        <p className="text-[10.5px] mt-0.5" style={{ color: isExpired ? '#f43f5e' : 'rgba(255,255,255,0.32)' }}>
+                          {isExpired ? 'Your plan has expired' : 'No active plan'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                      {[
+                        { icon: '🔍', label: '3× profile visibility' },
+                        { icon: '⚡', label: 'Premium gigs & AI tools' },
+                        { icon: '∞', label: 'Infinity verified badge' },
+                        { icon: '📄', label: 'E-Sign, DocWord & more' },
+                        { icon: '☁',  label: '5 GB Infinity Drive' },
+                        { icon: '🚀', label: 'Priority search ranking' },
+                      ].map(({ icon, label }) => (
+                        <div key={label} className="flex items-center gap-1.5 text-[10.5px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                          <span className="text-[12px] w-4 text-center shrink-0">{icon}</span>
+                          {label}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="px-5 pb-5">
+                    {infinityPayPhase === 'success' ? (
+                      <div className="rounded-[12px] py-2.5 text-center text-[12px] font-bold" style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.20)' }}>
+                        ✓ Infinity activated! Refresh to see your plan.
+                      </div>
+                    ) : (
+                      <>
+                        {infinityPayError && <p className="mb-2 text-[11px]" style={{ color: '#f43f5e' }}>{infinityPayError}</p>}
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            disabled={infinityPayPhase === 'paying'}
+                            onClick={() => void handleInfinityPayment('monthly')}
+                            className="flex-1 rounded-[12px] py-2.5 text-[12px] font-bold transition-all active:scale-[0.98] disabled:opacity-50"
+                            style={{ background: 'rgba(99,102,241,0.10)', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.22)' }}
+                          >
+                            {infinityPayPhase === 'paying' ? '…' : 'Monthly · ₹299'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={infinityPayPhase === 'paying'}
+                            onClick={() => void handleInfinityPayment('annual')}
+                            className="flex-1 rounded-[12px] py-2.5 text-[12px] font-bold transition-all active:scale-[0.98] disabled:opacity-50"
+                            style={{ background: 'linear-gradient(135deg,#4f46e5,#6366f1)', color: '#fff', boxShadow: '0 4px 18px rgba(99,102,241,0.35)' }}
+                          >
+                            {infinityPayPhase === 'paying' ? '…' : 'Annual · ₹2,499 / yr'}
+                          </button>
+                        </div>
+                        <p className="mt-2 text-center text-[9px]" style={{ color: 'rgba(255,255,255,0.18)' }}>
+                          {isExpired ? 'Reactivate to restore all premium features' : 'Unlock all premium features instantly'}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Feature post CTA */}
             <div className="rounded-[20px] border border-violet-500/[0.12] bg-violet-500/[0.04] p-6">
               <div className="flex items-start gap-4">
@@ -5337,7 +5588,8 @@ export default function UserProfilePage() {
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Settings tab ──────────────────────────────────────────── */}
         {tab === 'settings' && isOwnProfile && (() => {

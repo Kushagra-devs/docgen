@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { getStoredUsers, saveStoredUsers } from '@/lib/server/auth';
 import { readJsonFile, referralProgramPath, writeJsonFile } from '@/lib/server/storage';
-import { getProfileData, updateProfileData } from '@/lib/server/user-profiles';
+import { activateInfinity } from '@/lib/server/infinity';
 import { sendTrackedMail } from '@/lib/server/mailer';
 import { buildEmailChrome } from '@/lib/server/email-chrome';
 
@@ -182,25 +182,15 @@ export async function processProfileActivation(params: {
     activatedAt: now,
   };
 
-  // Check one-time bonus: only grant if referrer has never received it
-  const alreadyHasBonus = referrer.referralBonusActivatedAt || state.activations.some(
-    (act) => act.referrerUserId === referrer.id && act.bonusGrantedAt,
-  );
+  // Grant 1 month Infinity free to referee (the person who just signed up)
+  await activateInfinity(params.refereeUserId, { period: 'monthly', grantedFree: true });
 
+  // Grant 1 month Infinity free to referrer for each successful referral
   let bonusGranted = false;
-  if (!alreadyHasBonus) {
-    // Grant docrud Go to referrer (set profile flag)
-    const profile = await getProfileData(referrer.id);
-    if (!profile.docrudGo) {
-      await updateProfileData(referrer.id, {
-        docrudGo: true,
-        docrudGoPurchasedAt: now,
-        docrudGoReferralGrantedAt: now,
-        docrudGoGrantedFree: true,
-      });
-    }
+  {
+    await activateInfinity(referrer.id, { period: 'monthly', grantedFree: true });
 
-    // Save referralBonusActivatedAt on the referrer user record
+    // Save referralBonusActivatedAt on the referrer user record (for tracking)
     const nextUsers = users.map((u) =>
       u.id === referrer.id ? { ...u, referralBonusActivatedAt: now } : u,
     );
@@ -215,13 +205,13 @@ export async function processProfileActivation(params: {
       const bodyHtml = `
         <div style="background:linear-gradient(135deg,#0f0e2e 0%,#1e1b4b 50%,#0f0e2e 100%); border-radius:16px; padding:28px 24px; margin-bottom:20px; text-align:center;">
           <div style="font-size:11px; font-weight:800; letter-spacing:.18em; text-transform:uppercase; color:rgba(165,180,252,0.7); margin-bottom:8px;">🎉 Referral Reward Unlocked</div>
-          <div style="font-size:28px; font-weight:900; letter-spacing:-.03em; color:#a5b4fc;">Docrud Infinity ∞ — Free!</div>
+          <div style="font-size:28px; font-weight:900; letter-spacing:-.03em; color:#a5b4fc;">Docrud Infinity ∞ — 1 Month Free!</div>
           <div style="margin-top:10px; font-size:14px; color:rgba(255,255,255,0.55); max-width:360px; margin-left:auto; margin-right:auto; line-height:1.6;">
-            Your referral activated their profile. You've earned <strong style="color:#a5b4fc;">Docrud Infinity</strong> absolutely free — no payment required.
+            Your referral just signed up. You've earned <strong style="color:#a5b4fc;">1 month of Docrud Infinity</strong> free — no payment required.
           </div>
         </div>
         <p style="font-size:14.5px; color:#334155; line-height:1.7; margin:0 0 20px;">
-          Hi ${firstName}, a friend you referred just signed up and activated their Docrud profile. As promised, your <strong style="color:#4f46e5;">Docrud Infinity ∞</strong> badge is now live — completely free.
+          Hi ${firstName}, a friend you referred just signed up and activated their Docrud profile. You've earned <strong style="color:#4f46e5;">1 month of Docrud Infinity ∞</strong> free — enjoy all premium features for 30 days, no payment needed.
         </p>
         <div style="background:#eef2ff; border:1px solid #c7d2fe; border-radius:12px; padding:18px 20px; margin-bottom:20px;">
           <div style="font-size:12px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; color:#4338ca; margin-bottom:10px;">∞ You now have</div>
@@ -245,7 +235,7 @@ export async function processProfileActivation(params: {
       `;
       const html = buildEmailChrome({
         origin: params.origin,
-        subject: `You earned Docrud Infinity free, ${firstName}! ∞`,
+        subject: `You earned 1 month Docrud Infinity free, ${firstName}! ∞`,
         preheader: 'Your referral just activated — your Infinity badge is live for free.',
         bodyHtml,
       });
@@ -253,10 +243,10 @@ export async function processProfileActivation(params: {
         policyKey: 'docrud_go_welcome',
         typeLabel: 'docrud_go_welcome',
         to: referrer.email,
-        subject: `You earned Docrud Infinity free, ${firstName}! ∞`,
-        text: `Hi ${firstName}, your referral signed up and activated their Docrud profile. Your Docrud Infinity badge is now live — no payment needed. Sign in at ${params.origin}.`,
+        subject: `You earned 1 month Docrud Infinity free, ${firstName}! ∞`,
+        text: `Hi ${firstName}, your referral signed up and activated their Docrud profile. You've earned 1 month of Docrud Infinity free — enjoy all premium features. Sign in at ${params.origin}.`,
         html,
-        preheader: 'Your referral activated — Infinity badge unlocked for free.',
+        preheader: 'Your referral activated — 1 month Infinity unlocked for free.',
         sentBy: 'system',
         origin: params.origin,
         metadata: { type: 'referral_bonus', refereeUserId: params.refereeUserId },

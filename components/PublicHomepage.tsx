@@ -1786,6 +1786,8 @@ type HpFeedItem = {
   likesCount?: number;
   likedByViewer?: boolean;
   commentsCount?: number;
+  trendCount?: number;
+  trendedByViewer?: boolean;
   thumbnailUrl?: string;
   uploadedByUserId?: string;
   uploadedByName?: string;
@@ -1956,10 +1958,19 @@ function HpMetaChips({ body, byline, category }: { body: string; byline: string;
 
 
 function HomepageFeedCard({ item }: { item: HpFeedItem }) {
-  const [liked,     setLiked]     = React.useState(item.likedByViewer ?? false);
-  const [likeCount, setLikeCount] = React.useState(item.likesCount ?? 0);
-  const [saved,     setSaved]     = React.useState(false);
-  const likeInFlight = React.useRef(false);
+  const [liked,      setLiked]      = React.useState(item.likedByViewer ?? false);
+  const [likeCount,  setLikeCount]  = React.useState(item.likesCount ?? 0);
+  const [trended,    setTrended]    = React.useState(() => {
+    const stored = hpReadTrends()[item.id];
+    return stored ? stored.trendedByViewer : (item.trendedByViewer ?? false);
+  });
+  const [trendCount, setTrendCount] = React.useState(() => {
+    const stored = hpReadTrends()[item.id];
+    return stored ? stored.count : (item.trendCount ?? 0);
+  });
+  const [saved,      setSaved]      = React.useState(false);
+  const likeInFlight  = React.useRef(false);
+  const trendInFlight = React.useRef(false);
 
   React.useEffect(() => { setLiked(item.likedByViewer ?? false); }, [item.likedByViewer]);
   React.useEffect(() => { setLikeCount(item.likesCount ?? 0); }, [item.likesCount]);
@@ -2086,6 +2097,40 @@ function HomepageFeedCard({ item }: { item: HpFeedItem }) {
         </Link>
         <button
           type="button"
+          onClick={async e => {
+            e.stopPropagation();
+            if (trendInFlight.current) return;
+            const next = !trended;
+            setTrended(next);
+            setTrendCount(c => next ? c + 1 : Math.max(0, c - 1));
+            hpWriteTrend(item, next);
+            if (item.isReal) {
+              trendInFlight.current = true;
+              try {
+                const res = await fetch(`/api/published/${item.id}/trend`, { method: 'POST' });
+                if (res.ok) {
+                  const d = await res.json() as { trended: boolean; trendCount: number };
+                  setTrended(d.trended);
+                  setTrendCount(d.trendCount);
+                  hpWriteTrend(item, d.trended);
+                } else {
+                  setTrended(trended);
+                  setTrendCount(c => next ? Math.max(0, c - 1) : c + 1);
+                  hpWriteTrend(item, trended);
+                }
+              } catch {
+                setTrended(trended);
+                hpWriteTrend(item, trended);
+              } finally { trendInFlight.current = false; }
+            }
+          }}
+          className={`flex items-center gap-1.5 text-[12px] font-semibold transition ${trended ? 'text-orange-400' : 'text-white/35 hover:text-white/70'}`}
+        >
+          <TrendingUp className={`h-4 w-4 transition-transform ${trended ? 'scale-110' : ''}`} />
+          <span>{trendCount > 0 ? (trendCount >= 1000 ? `${(trendCount/1000).toFixed(1)}k` : String(trendCount)) : (trended ? 'Trending' : 'Trend')}</span>
+        </button>
+        <button
+          type="button"
           className="ml-auto flex items-center gap-1.5 text-[12px] font-semibold text-white/25 hover:text-white/55 transition"
           onClick={async e => {
             e.stopPropagation();
@@ -2108,6 +2153,32 @@ const hpReadTrends       = (): Record<string, HpTrendEntry>       => { try { ret
 const hpReadTagTrends    = (): Record<string, number>             => { try { return JSON.parse(localStorage.getItem('pub_tag_trends')    || '{}'); } catch { return {}; } };
 const hpReadCatTrends    = (): Record<string, number>             => { try { return JSON.parse(localStorage.getItem('pub_cat_trends')    || '{}'); } catch { return {}; } };
 const hpReadTrendHistory = (): HpTrendHistoryEntry[]              => { try { return JSON.parse(localStorage.getItem('pub_trend_history') || '[]'); } catch { return []; } };
+
+function hpWriteTrend(item: HpFeedItem, next: boolean) {
+  const delta = next ? 1 : -1;
+  try {
+    const data = hpReadTrends();
+    const stored = data[item.id] ?? { count: 0, trendedByViewer: false, category: item.category, title: item.title, chips: item.chips ?? [] };
+    stored.count = Math.max(0, stored.count + delta);
+    stored.trendedByViewer = next;
+    localStorage.setItem('pub_trends', JSON.stringify({ ...data, [item.id]: stored }));
+  } catch {}
+  try {
+    const tagData = hpReadTagTrends();
+    [...(item.chips ?? []), item.category].forEach(t => { tagData[t] = Math.max(0, (tagData[t] ?? 0) + delta); });
+    localStorage.setItem('pub_tag_trends', JSON.stringify(tagData));
+  } catch {}
+  try {
+    const catData = hpReadCatTrends();
+    catData[item.category] = Math.max(0, (catData[item.category] ?? 0) + delta);
+    localStorage.setItem('pub_cat_trends', JSON.stringify(catData));
+  } catch {}
+  if (next) try {
+    const hist = hpReadTrendHistory();
+    hist.unshift({ postId: item.id, title: item.title, category: item.category, trendedAt: Date.now(), tags: item.chips ?? [] });
+    localStorage.setItem('pub_trend_history', JSON.stringify(hist.slice(0, 200)));
+  } catch {}
+}
 
 function HomepageLiveFeed() {
   const [allItems,   setAllItems]   = React.useState<HpFeedItem[]>([]);
@@ -2836,7 +2907,7 @@ function BuiltInIndia() {
         </div>
 
         {/* tagline */}
-        <p className="mx-auto mt-5 max-w-xs text-[12px] font-medium leading-relaxed text-white/16"
+        <p className="mx-auto mt-5 max-w-xs text-[12px] font-medium leading-relaxed text-white"
           style={tx(440)}>
           Professional infrastructure crafted with Indian ingenuity,
           trusted by teams across industries worldwide.

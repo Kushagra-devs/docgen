@@ -94,7 +94,8 @@ export async function GET(request: NextRequest) {
         };
       });
     return NextResponse.json({ items });
-  } catch {
+  } catch (err) {
+    console.error('[/api/public/published] error:', err);
     return NextResponse.json({ items: [] });
   }
 }

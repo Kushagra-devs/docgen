@@ -45,6 +45,7 @@ const EXCLUDED = [
   '/pdf-studio',
   '/doc-word',
   '/form-builder',
+  '/onboarding',
 ];
 
 function shouldShow(path: string) {
