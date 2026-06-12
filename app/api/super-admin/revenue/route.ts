@@ -4,13 +4,13 @@ import { getBillingTransactions } from '@/lib/server/billing';
 import { getStoredUsers } from '@/lib/server/auth';
 import { getSaasPlans } from '@/lib/server/saas';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {

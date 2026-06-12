@@ -4,7 +4,7 @@ import { getSuperAdminEmail, setSuperAdminEmail } from '@/lib/server/super-admin
 // One-time setup endpoint — only works when no super admin email is configured
 export async function POST(req: NextRequest) {
   try {
-    const existing = getSuperAdminEmail();
+    const existing = await getSuperAdminEmail();
     if (existing) {
       return NextResponse.json({ error: 'Super admin already configured. Use environment variable SUPER_ADMIN_EMAIL to change.' }, { status: 403 });
     }
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Valid email required' }, { status: 400 });
     }
 
-    setSuperAdminEmail(email.trim().toLowerCase());
+    await setSuperAdminEmail(email.trim().toLowerCase());
     return NextResponse.json({ success: true, email: email.trim().toLowerCase() });
   } catch (err) {
     console.error('[super-admin/setup]', err);
@@ -28,6 +28,6 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  const email = getSuperAdminEmail();
+  const email = await getSuperAdminEmail();
   return NextResponse.json({ configured: Boolean(email) });
 }

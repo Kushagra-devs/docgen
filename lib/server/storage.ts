@@ -92,6 +92,12 @@ export const publicFaceApplicationsPath = path.join(dataDir, 'public-face-applic
 export const publicFaceOtpsPath = path.join(dataDir, 'public-face-otps.json');
 export const presencePath = path.join(dataDir, 'presence.json');
 export const behaviorEventsPath = path.join(dataDir, 'behavior-events.json');
+export const recentsPath = path.join(dataDir, 'recents.json');
+export const publishRegistrationsPath = path.join(dataDir, 'publish-registrations.json');
+export const superAdminConfigPath = path.join(dataDir, 'super-admin-config.json');
+export const integrationsConfigPath = path.join(dataDir, 'integrations-config.json');
+export const businessReviewsPath = path.join(dataDir, 'business-reviews.json');
+export const businessPagesPath = path.join(dataDir, 'business-pages.json');
 
 type DbAdapter = {
   read: () => Promise<unknown>;
@@ -169,18 +175,22 @@ export async function ensureDirectory(filePath: string) {
 }
 
 export async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
+  const label = path.basename(filePath);
   if (getDbPool()) {
     const adapter = getDbAdapters().get(filePath);
     if (adapter) {
       try {
         const value = await adapter.read();
+        const count = Array.isArray(value) ? (value as unknown[]).length : typeof value === 'object' && value !== null ? Object.keys(value as object).length : '?';
+        console.log(`[storage] ${label} → DB row-adapter (${count} items)`);
         return value as T;
       } catch (error) {
-        console.error(`Failed to read row adapter for ${filePath}`, error);
+        console.error(`[storage] ${label} → DB row-adapter FAILED`, error);
+        return fallback;
       }
     }
+    console.log(`[storage] ${label} → getDbPool() set but NO adapter, falling to app_state`);
   }
-
 
   const appStateKey = getAppStateKey(filePath);
 
@@ -188,27 +198,25 @@ export async function readJsonFile<T>(filePath: string, fallback: T): Promise<T>
     try {
       const databaseValue = await readAppState<T>(appStateKey);
       if (databaseValue !== null) {
+        const count = Array.isArray(databaseValue) ? (databaseValue as unknown[]).length : '?';
+        console.log(`[storage] ${label} → app_state key=${appStateKey} (${count} items)`);
         return databaseValue;
       }
+      console.log(`[storage] ${label} → app_state key=${appStateKey} not found, returning fallback`);
     } catch (error) {
-      console.error(`Failed to read app state from database for ${appStateKey}`, error);
+      console.error(`[storage] ${label} → app_state read FAILED`, error);
     }
+    return fallback;
   }
 
   try {
     const content = await fs.readFile(filePath, 'utf8');
     const parsed = JSON.parse(content) as T;
-
-    if (isDatabaseConfigured()) {
-      try {
-        await writeAppState(appStateKey, parsed);
-      } catch (error) {
-        console.error(`Failed to seed app state into database for ${appStateKey}`, error);
-      }
-    }
-
+    const count = Array.isArray(parsed) ? (parsed as unknown[]).length : '?';
+    console.log(`[storage] ${label} → JSON file (${count} items)`);
     return parsed;
   } catch {
+    console.log(`[storage] ${label} → JSON file not found, returning fallback`);
     return fallback;
   }
 }

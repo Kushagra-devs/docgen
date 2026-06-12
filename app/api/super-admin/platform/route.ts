@@ -3,24 +3,24 @@ import { getSuperAdminSessionFromRequest, appendSuperAdminAudit, getPlatformFlag
 import { getPlatformConfig, savePlatformConfig } from '@/lib/server/platform';
 import { getAuthSettings, saveAuthSettings, getMailSettings, saveMailSettings } from '@/lib/server/settings';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const [flags, platformConfig, authSettings, mailSettings] = await Promise.all([
-      Promise.resolve(getPlatformFlags()),
+      getPlatformFlags(),
       getPlatformConfig(),
       getAuthSettings().catch(() => null),
       getMailSettings().catch(() => null),
     ]);
 
-    const saConfig = getSuperAdminConfig();
+    const saConfig = await getSuperAdminConfig();
     const activeSessions = saConfig.activeSessions.filter((s) => new Date(s.expiresAt) > new Date());
 
     return NextResponse.json({
@@ -46,21 +46,21 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const body = await req.json();
     const { action, data } = body;
 
-    appendSuperAdminAudit({
+    await appendSuperAdminAudit({
       action: `platform_${action}`,
       details: { data },
       ip: req.headers.get('x-forwarded-for') || undefined,
     });
 
     if (action === 'update_flags') {
-      savePlatformFlags(data);
+      await savePlatformFlags(data);
       return NextResponse.json({ success: true });
     }
 

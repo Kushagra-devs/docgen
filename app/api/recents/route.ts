@@ -2,19 +2,19 @@ import { NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/server/auth';
 import { getRecents, createRecent } from '@/lib/server/recents';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const session = await getAuthSession();
   const userId = (session?.user as { id?: string })?.id ?? null;
 
-  // Public recents + own private recents
-  const all = getRecents();
+  const all = await getRecents();
   const visible = all.filter((r) => {
     if (r.visibility === 'public') return true;
     if (userId && r.userId === userId) return true;
     return false;
   });
 
-  // Sort newest first
   visible.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return NextResponse.json({ recents: visible });
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
   const type = (body.type === 'image' || body.type === 'video' || body.type === 'text') ? body.type : 'text';
   const visibility = body.visibility === 'private' ? 'private' : 'public';
 
-  const recent = createRecent({
+  const recent = await createRecent({
     userId,
     userName: session?.user?.name ?? 'Unknown',
     userAvatar: session?.user?.image ?? null,

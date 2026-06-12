@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSuperAdminSessionFromRequest, getSuperAdminAuditLog } from '@/lib/server/super-admin-auth';
 import { getAdminAuditEvents } from '@/lib/server/admin-audit';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const [saAudit, adminAudit] = await Promise.all([
-      Promise.resolve(getSuperAdminAuditLog(limit)),
+      getSuperAdminAuditLog(limit),
       getAdminAuditEvents(limit).catch(() => []),
     ]);
 

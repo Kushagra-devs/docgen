@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFileTransfers } from '@/lib/server/file-transfers';
 import { getAuthSession } from '@/lib/server/auth';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { readJsonFile, businessPagesPath } from '@/lib/server/storage';
 
 /* Build a lookup map: company name (lowercase) → { slug, id } */
 async function buildBusinessLookup(): Promise<Map<string, { slug: string; id: string }>> {
   const map = new Map<string, { slug: string; id: string }>();
   try {
-    const raw = await fs.readFile(path.join(process.cwd(), 'data', 'business-pages.json'), 'utf8');
-    const store = JSON.parse(raw) as { pages?: Array<{ id: string; slug: string; name: string; ownerUserId: string }> };
+    const store = await readJsonFile<{ pages?: Array<{ id: string; slug: string; name: string; ownerUserId: string }> }>(businessPagesPath, {});
     for (const p of store.pages ?? []) {
       if (p.name && p.slug) map.set(p.name.toLowerCase(), { slug: p.slug, id: p.id });
     }

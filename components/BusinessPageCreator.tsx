@@ -266,13 +266,12 @@ export default function BusinessPageCreator() {
 
           {/* Nav buttons */}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28, gap: 12 }}>
-            {step > 1 ? (
-              <button onClick={() => setStep((s) => s - 1)} style={{ padding: '11px 20px', borderRadius: 11, border: '1px solid rgba(255,255,255,0.12)', background: 'none', color: 'rgba(255,255,255,0.50)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                ← Back
-              </button>
-            ) : (
-              <div />
-            )}
+            <button
+              onClick={() => step > 1 ? setStep((s) => s - 1) : router.back()}
+              style={{ padding: '11px 20px', borderRadius: 11, border: '1px solid rgba(255,255,255,0.12)', background: 'none', color: 'rgba(255,255,255,0.50)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            >
+              ← Back
+            </button>
 
             {step < 3 ? (
               <button onClick={() => setStep((s) => s + 1)} disabled={!canProceed()}

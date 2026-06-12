@@ -1,13 +1,10 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
-import path from 'path';
 import crypto from 'crypto';
 import { getAuthSession } from '@/lib/server/auth';
 import { getBusinessPageById } from '@/lib/server/business-pages';
-
-const REVIEWS_FILE = path.join(process.cwd(), 'data', 'business-reviews.json');
+import { readJsonFile, writeJsonFile, businessReviewsPath } from '@/lib/server/storage';
 
 interface Review {
   id: string; pageId: string; userId: string; userName: string;
@@ -17,12 +14,10 @@ interface Review {
 interface Store { reviews: Review[] }
 
 async function readStore(): Promise<Store> {
-  try { return JSON.parse(await fs.readFile(REVIEWS_FILE, 'utf8')) as Store; }
-  catch { return { reviews: [] }; }
+  return readJsonFile<Store>(businessReviewsPath, { reviews: [] });
 }
-async function writeStore(s: Store) {
-  await fs.mkdir(path.dirname(REVIEWS_FILE), { recursive: true });
-  await fs.writeFile(REVIEWS_FILE, JSON.stringify(s, null, 2));
+async function writeStore(s: Store): Promise<void> {
+  await writeJsonFile(businessReviewsPath, s);
 }
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
@@ -48,7 +43,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const body = await req.json() as { rating?: number; title?: string; body?: string; action?: string; reviewId?: string };
 
-    // helpful toggle
     if (body.action === 'helpful' && body.reviewId) {
       const store = await readStore();
       const rev = store.reviews.find(r => r.id === body.reviewId);
@@ -66,7 +60,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!body.body?.trim()) return NextResponse.json({ error: 'Review text required' }, { status: 400 });
 
     const store = await readStore();
-    // one review per user per page
     const existing = store.reviews.findIndex(r => r.pageId === params.id && r.userId === session.user.id);
     const review: Review = {
       id: existing >= 0 ? store.reviews[existing].id : crypto.randomUUID(),

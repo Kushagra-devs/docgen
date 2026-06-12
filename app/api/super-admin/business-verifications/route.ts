@@ -16,7 +16,7 @@ import { getStoredUserById } from "@/lib/server/users";
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
-  const { valid } = getSuperAdminSessionFromRequest(req);
+  const { valid } = await getSuperAdminSessionFromRequest(req);
   if (!valid) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const status = req.nextUrl.searchParams.get('status') as VerificationStatus | null;
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { valid, email: adminEmail } = getSuperAdminSessionFromRequest(req);
+  const { valid, email: adminEmail } = await getSuperAdminSessionFromRequest(req);
   if (!valid) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id, status, adminNotes } = await req.json() as {

@@ -125,10 +125,8 @@ export async function extractDocumentText(fileName: string, mimeType: string, bu
 
   if (normalizedMime === 'application/pdf' || extension === 'pdf') {
     try {
-      const { PDFParse } = require('pdf-parse') as { PDFParse: new (options: { data: Buffer }) => { getText: () => Promise<{ text?: string }>; destroy: () => Promise<void> } };
-      const parser = new PDFParse({ data: buffer });
-      const parsed = await parser.getText();
-      await parser.destroy();
+      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
+      const parsed = await pdfParse(buffer);
       const text = preserveDocumentStructure(parsed.text || '');
       if (text) {
         return text;

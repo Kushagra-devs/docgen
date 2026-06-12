@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSuperAdminSessionFromRequest, appendSuperAdminAudit } from '@/lib/server/super-admin-auth';
 import { getGigListings, saveGigListings, getGigConnections, getGigBids } from '@/lib/server/gigs';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     const idx = gigs.findIndex((g) => g.id === gigId);
     if (idx === -1) return NextResponse.json({ error: 'Gig not found' }, { status: 404 });
 
-    appendSuperAdminAudit({ action: `gig_${action}`, targetType: 'gig', targetId: gigId, ip: req.headers.get('x-forwarded-for') || undefined });
+    await appendSuperAdminAudit({ action: `gig_${action}`, targetType: 'gig', targetId: gigId, ip: req.headers.get('x-forwarded-for') || undefined });
 
     if (action === 'unpublish') {
       gigs[idx] = { ...gigs[idx], status: 'closed' };

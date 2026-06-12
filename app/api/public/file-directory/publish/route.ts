@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/server/auth';
-import { appendFileTransfer, getFileTransfers } from '@/lib/server/file-transfers';
+import { appendFileTransfer, getFileTransfers, updateFileTransfer } from '@/lib/server/file-transfers';
 import { recordPost, checkAndGrantMilestones } from '@/lib/server/credits';
 import { readJsonFile } from '@/lib/server/storage';
 import path from 'path';
@@ -129,28 +129,15 @@ export async function POST(request: NextRequest) {
     if (rawThumb && rawThumb.startsWith('data:image/')) {
       const thumbApiUrl = saveThumbnail(created.id, rawThumb);
       if (thumbApiUrl) {
-        // Patch the stored thumbnailUrl to be the API path instead of the huge base64 string
+        // Replace the huge base64 thumbnailUrl with the lightweight API path
         try {
-          const { readJsonFile: rjf, writeJsonFile: wjf, fileTransfersPath: ftp } = await import('@/lib/server/storage');
-          const transfers = await rjf<SecureFileTransfer[]>(ftp, []);
-          const idx = transfers.findIndex(t => t.id === created.id);
-          if (idx !== -1) {
-            transfers[idx] = { ...transfers[idx], thumbnailUrl: thumbApiUrl };
-            await wjf(ftp, transfers);
-            created.thumbnailUrl = thumbApiUrl;
-          }
+          await updateFileTransfer(created.id, { thumbnailUrl: thumbApiUrl });
+          created.thumbnailUrl = thumbApiUrl;
         } catch { /* non-fatal */ }
       } else {
-        // thumbnail save failed — clear it from record so feed doesn't try to show broken image
+        // thumbnail save failed — clear it so the feed doesn't show a broken image
         try {
-          const { readJsonFile: rjf, writeJsonFile: wjf, fileTransfersPath: ftp } = await import('@/lib/server/storage');
-          const transfers = await rjf<SecureFileTransfer[]>(ftp, []);
-          const idx = transfers.findIndex(t => t.id === created.id);
-          if (idx !== -1) {
-            const { thumbnailUrl: _removed, ...rest } = transfers[idx];
-            transfers[idx] = rest as SecureFileTransfer;
-            await wjf(ftp, transfers);
-          }
+          await updateFileTransfer(created.id, { thumbnailUrl: undefined });
         } catch { /* non-fatal */ }
         created.thumbnailUrl = undefined;
       }

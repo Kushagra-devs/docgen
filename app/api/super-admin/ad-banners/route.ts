@@ -16,13 +16,13 @@ type AdBanner = {
   createdAt: string;
 };
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  if (!guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const banners = await readJsonFile<AdBanner[]>(adBannersPath, []);
     return NextResponse.json({ banners });
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const body = await req.json() as {
       action: 'upsert' | 'delete' | 'reorder';

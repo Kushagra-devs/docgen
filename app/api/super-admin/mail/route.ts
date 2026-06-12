@@ -5,13 +5,13 @@ import { getEmailOutbox } from '@/lib/server/email-outbox';
 import { sendTrackedMail } from '@/lib/server/mailer';
 import { getStoredUsers } from '@/lib/server/auth';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       if (audience === 'individual') targets = targets.filter((u) => u.accountType === 'individual');
       if (audience === 'admins') targets = targets.filter((u) => u.role === 'admin');
 
-      appendSuperAdminAudit({
+      await appendSuperAdminAudit({
         action: 'broadcast_email_sent',
         details: { subject, audience, recipientCount: targets.length },
         ip: req.headers.get('x-forwarded-for') || undefined,

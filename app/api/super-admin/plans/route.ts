@@ -4,13 +4,13 @@ import { getSaasPlans, saveSaasPlans } from '@/lib/server/saas';
 import { getStoredUsers } from '@/lib/server/auth';
 import { getBillingTransactions } from '@/lib/server/billing';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       if (plans.find((p) => p.id === plan.id)) return NextResponse.json({ error: 'Plan with this ID already exists' }, { status: 409 });
       plans.push({ ...plan, isCustom: true, createdAt: new Date().toISOString() });
       await saveSaasPlans(plans);
-      appendSuperAdminAudit({ action: 'plan_created', targetType: 'plan', targetId: plan.id, details: { plan }, ip: req.headers.get('x-forwarded-for') || undefined });
+      await appendSuperAdminAudit({ action: 'plan_created', targetType: 'plan', targetId: plan.id, details: { plan }, ip: req.headers.get('x-forwarded-for') || undefined });
       return NextResponse.json({ success: true });
     }
 
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       if (idx === -1) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
       plans[idx] = { ...plans[idx], ...plan, updatedAt: new Date().toISOString() };
       await saveSaasPlans(plans);
-      appendSuperAdminAudit({ action: 'plan_updated', targetType: 'plan', targetId: plan.id, details: { plan }, ip: req.headers.get('x-forwarded-for') || undefined });
+      await appendSuperAdminAudit({ action: 'plan_updated', targetType: 'plan', targetId: plan.id, details: { plan }, ip: req.headers.get('x-forwarded-for') || undefined });
       return NextResponse.json({ success: true });
     }
 
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       const filtered = plans.filter((p) => p.id !== plan.id);
       if (filtered.length === plans.length) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
       await saveSaasPlans(filtered);
-      appendSuperAdminAudit({ action: 'plan_deleted', targetType: 'plan', targetId: plan.id, ip: req.headers.get('x-forwarded-for') || undefined });
+      await appendSuperAdminAudit({ action: 'plan_deleted', targetType: 'plan', targetId: plan.id, ip: req.headers.get('x-forwarded-for') || undefined });
       return NextResponse.json({ success: true });
     }
 

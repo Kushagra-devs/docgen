@@ -1,7 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs';
-import path from 'path';
-
-const configPath = path.join(process.cwd(), 'data', 'integrations-config.json');
+import { readJsonFile, writeJsonFile, integrationsConfigPath } from '@/lib/server/storage';
 
 export interface GoogleAnalyticsConfig {
   enabled: boolean;
@@ -52,19 +49,15 @@ const defaultConfig: IntegrationsConfig = {
   updatedAt: new Date().toISOString(),
 };
 
-export function getIntegrationsConfig(): IntegrationsConfig {
-  try {
-    if (!existsSync(configPath)) return defaultConfig;
-    return { ...defaultConfig, ...JSON.parse(readFileSync(configPath, 'utf-8')) };
-  } catch {
-    return defaultConfig;
-  }
+export async function getIntegrationsConfig(): Promise<IntegrationsConfig> {
+  const stored = await readJsonFile<Partial<IntegrationsConfig>>(integrationsConfigPath, {});
+  return { ...defaultConfig, ...stored };
 }
 
-export function saveIntegrationsConfig(config: Partial<IntegrationsConfig>) {
-  const current = getIntegrationsConfig();
+export async function saveIntegrationsConfig(config: Partial<IntegrationsConfig>): Promise<void> {
+  const current = await getIntegrationsConfig();
   const next = { ...current, ...config, updatedAt: new Date().toISOString() };
-  writeFileSync(configPath, JSON.stringify(next, null, 2), 'utf-8');
+  await writeJsonFile(integrationsConfigPath, next);
 }
 
 export async function sendGoogleAnalyticsEvent(measurementId: string, apiSecret: string, events: object[]) {
@@ -79,7 +72,7 @@ export async function sendGoogleAnalyticsEvent(measurementId: string, apiSecret:
 }
 
 export async function sendSlackNotification(message: string) {
-  const cfg = getIntegrationsConfig();
+  const cfg = await getIntegrationsConfig();
   if (!cfg.slack.enabled || !cfg.slack.webhookUrl) return;
   try {
     await fetch(cfg.slack.webhookUrl, {

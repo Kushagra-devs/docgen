@@ -22,7 +22,10 @@ function normalizeValue(value: unknown): string {
 }
 
 export function isAiConfigured() {
-  return Boolean(process.env.GROQ_API_KEY?.trim());
+  const key = process.env.GROQ_API_KEY?.trim();
+  if (!key) return false;
+  if (key.startsWith('your-') || key === 'GROQ_API_KEY' || key === 'placeholder') return false;
+  return true;
 }
 
 function getApiKey() {

@@ -12,7 +12,10 @@ export interface FeedItem {
   postedAt: string;
 }
 
-export const FEED_ITEMS: FeedItem[] = [
+export const FEED_ITEMS: FeedItem[] = [];
+
+// Removed mock entries — all content comes from DB
+const _REMOVED_FEED_ITEMS: FeedItem[] = [
   /* News */
   { id:'n1', category:'news', badge:'Breaking', title:'Reliance Jio Launches JioSpace Satellite Internet Across 1,200 Rural Districts', byline:'Economic Times', body:'JioSpace will deliver broadband connectivity to over 6 crore households in Tier-3 and rural areas by Q2 2025, powered by 28 low-orbit satellites in partnership with ISRO.', chips:['JioSpace','satellite internet','rural connectivity','ISRO'], postedAt:'2026-05-12T06:00:00Z' },
   { id:'n2', category:'news', badge:'Markets', title:"SEBI Approves India's First Domestic ETF for Listed AI Companies", byline:'Mint', body:'The Securities & Exchange Board of India has greenlit a first-of-its-kind domestic ETF tracking 28 publicly listed AI and deeptech firms.', chips:['SEBI','ETF','AI companies','deeptech'], postedAt:'2026-05-12T04:00:00Z' },
@@ -74,4 +77,4 @@ export const FEED_ITEMS: FeedItem[] = [
   /* Charts */
   { id:'ch1', category:'chart', badge:'Market Data', title:'India SaaS ARR Growth by Vertical — 2023 to 2026', byline:'SaaSBOOMi Research', body:'FinTech SaaS grew 3.4× while HR-tech and EdTech saw consolidation. B2B infrastructure quietly became the biggest segment.', chips:['SaaS','ARR','market data','fintech','India'], postedAt:'2026-05-12T05:00:00Z' },
   { id:'ch2', category:'chart', badge:'Hiring Trends', title:'Tech Hiring Recovery Index — Jan to May 2026', byline:'LinkedIn India', body:'After 18 months of contraction, tech hiring has rebounded 68% YoY. AI/ML and cloud roles leading recovery.', chips:['tech hiring','AI/ML','cloud','market data','recovery'], postedAt:'2026-05-10T07:00:00Z' },
-];
+] as FeedItem[];

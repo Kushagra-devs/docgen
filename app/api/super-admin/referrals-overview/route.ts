@@ -3,13 +3,13 @@ import { getSuperAdminSessionFromRequest } from '@/lib/server/super-admin-auth';
 import { listReferralInvites, listReferralActivations, listReferralRedemptions } from '@/lib/server/referrals';
 import { getStoredUsers } from '@/lib/server/auth';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {

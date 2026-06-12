@@ -130,7 +130,7 @@ export async function sendVerificationAdminAlertEmail(opts: {
   verif: BusinessVerification;
 }) {
   const { businessName, ownerEmail, verif } = opts;
-  const adminEmail = getSuperAdminEmail();
+  const adminEmail = await getSuperAdminEmail();
   if (!adminEmail) return; // no admin email configured
 
   const base = origin();

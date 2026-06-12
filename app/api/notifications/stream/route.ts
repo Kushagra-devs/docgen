@@ -12,7 +12,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest } from 'next/server';
-import { getAuthSession, getStoredUsers } from '@/lib/server/auth';
+import { getAuthSession } from '@/lib/server/auth';
+import { getStoredUserById, getStoredUserByEmail } from '@/lib/server/users';
 import { getWorkspaceNotifications } from '@/lib/server/notifications';
 
 // In-memory registry of active SSE connections (works in dev / single-process)
@@ -42,11 +43,26 @@ export async function GET(req: NextRequest) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const users = await getStoredUsers();
-  const user = users.find(
-    (u) => u.email.toLowerCase() === session.user!.email!.toLowerCase(),
-  );
-  if (!user) return new Response('User not found', { status: 404 });
+  const sessionId = (session.user as { id?: string })?.id;
+  let user = sessionId
+    ? await getStoredUserById(sessionId)
+    : null;
+  if (!user) user = await getStoredUserByEmail(session.user!.email!);
+  if (!user) {
+    // Authenticated but no workspace record yet — return an empty keepalive stream
+    const emptyStream = new ReadableStream({
+      start(c) {
+        c.enqueue(`data: ${JSON.stringify({ notifications: [], unreadCount: 0 })}\n\n`);
+        const keepalive = setInterval(() => {
+          try { c.enqueue(`: keepalive\n\n`); } catch { clearInterval(keepalive); }
+        }, 25_000);
+        req.signal.addEventListener('abort', () => { clearInterval(keepalive); try { c.close(); } catch { /**/ } });
+      },
+    });
+    return new Response(emptyStream, {
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' },
+    });
+  }
 
   const userId = user.id;
   let ctrl!: ReadableStreamDefaultController;

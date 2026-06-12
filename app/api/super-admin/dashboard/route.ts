@@ -8,8 +8,8 @@ import { getUserActivityEvents } from '@/lib/server/user-intelligence';
 import { getAllPublishedItems } from '@/lib/server/feed-moderation';
 import { getAllProfiles } from '@/lib/server/user-profiles';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? null : NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
@@ -36,7 +36,7 @@ function txPaise(t: { amountInPaise?: number; amountPaise?: number }) {
 }
 
 export async function GET(req: NextRequest) {
-  const fail = guard(req);
+  const fail = await guard(req);
   if (fail) return fail;
 
   try {

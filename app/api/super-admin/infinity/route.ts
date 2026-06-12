@@ -4,14 +4,14 @@ import { getProfileData, updateProfileData, getAllProfiles } from '@/lib/server/
 
 export const dynamic = 'force-dynamic';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? null : NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 
 /** GET — list all Infinity subscribers */
 export async function GET(req: NextRequest) {
-  const fail = guard(req);
+  const fail = await guard(req);
   if (fail) return fail;
 
   try {
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
 /** POST — grant or revoke Infinity for a user */
 export async function POST(req: NextRequest) {
-  const fail = guard(req);
+  const fail = await guard(req);
   if (fail) return fail;
 
   try {

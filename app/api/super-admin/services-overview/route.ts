@@ -3,13 +3,13 @@ import { getSuperAdminSessionFromRequest, appendSuperAdminAudit } from '@/lib/se
 import { getAllServices, getAllBookings, getAllReviews } from '@/lib/server/services';
 import { getStoredUsers } from '@/lib/server/auth';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -112,13 +112,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const { action, serviceId, userId } = await req.json() as { action: string; serviceId?: string; userId?: string };
 
-    appendSuperAdminAudit({
+    await appendSuperAdminAudit({
       action: `service_${action}`,
       targetType: 'service',
       targetId: serviceId,

@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSuperAdminSessionFromRequest, appendSuperAdminAudit } from '@/lib/server/super-admin-auth';
 import { getLandingSettings, saveLandingSettings, getThemeSettings, saveThemeSettings } from '@/lib/server/settings';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -25,13 +25,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const { action, data } = await req.json();
 
-    appendSuperAdminAudit({
+    await appendSuperAdminAudit({
       action: `content_${action}`,
       details: { keys: data ? Object.keys(data) : [] },
       ip: req.headers.get('x-forwarded-for') || undefined,

@@ -8,15 +8,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'sessionId and otp are required' }, { status: 400 });
     }
 
-    const result = verifySuperAdminOtp(String(sessionId), String(otp));
+    const result = await verifySuperAdminOtp(String(sessionId), String(otp));
     if (!result.valid) {
       return NextResponse.json({ error: result.error || 'Invalid OTP' }, { status: 401 });
     }
 
-    const email = result.email || getSuperAdminEmail();
-    const token = createSuperAdminSession(email, req);
+    const email = result.email || await getSuperAdminEmail();
+    const token = await createSuperAdminSession(email, req);
 
-    appendSuperAdminAudit({
+    await appendSuperAdminAudit({
       action: 'super_admin_login',
       details: { email },
       ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || undefined,

@@ -4,8 +4,8 @@ import { getWebTelemetryEvents } from '@/lib/server/telemetry';
 import { getStoredUsers } from '@/lib/server/auth';
 import { SEARCH_CONTEXT_LABELS } from '@/lib/search-tracking';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
@@ -14,7 +14,7 @@ function subDays(n: number) {
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);

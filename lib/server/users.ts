@@ -98,7 +98,8 @@ export async function saveStoredUsers(users: StoredUser[]) {
 export async function getStoredUserById(id: string): Promise<StoredUser | null> {
   if (getDbPool()) {
     const row = await selectUserRowById(id);
-    return row ? { ...row, email: normalizeEmail(row.email) } : null;
+    if (row) return { ...row, email: normalizeEmail(row.email) };
+    // DB miss — could be a default/seeded user not yet in the DB table; fall through
   }
   const users = await getStoredUsers();
   return users.find((u) => u.id === id) || null;
@@ -109,7 +110,8 @@ export async function getStoredUserByEmail(email: string): Promise<StoredUser | 
   const normalized = normalizeEmail(email);
   if (getDbPool()) {
     const row = await selectUserRowByEmail(normalized);
-    return row ? { ...row, email: normalizeEmail(row.email) } : null;
+    if (row) return { ...row, email: normalizeEmail(row.email) };
+    // DB miss — fall through to full list
   }
   const users = await getStoredUsers();
   return users.find((u) => normalizeEmail(u.email) === normalized) || null;

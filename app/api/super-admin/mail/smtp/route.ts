@@ -6,8 +6,8 @@ import type { MailSettings } from '@/types/document';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
@@ -16,7 +16,7 @@ function maskSettings(settings: MailSettings) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const settings = await getMailSettings();
     return NextResponse.json(maskSettings(settings));
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const payload = await req.json() as Partial<MailSettings>;
@@ -39,7 +39,7 @@ export async function PUT(req: NextRequest) {
       password: payload.password === '********' ? current.password : (payload.password ?? current.password),
     };
     await saveMailSettings(next);
-    appendSuperAdminAudit({
+    await appendSuperAdminAudit({
       action: 'settings_update_mail',
       details: { keys: Object.keys(payload) },
       ip: req.headers.get('x-forwarded-for') || undefined,

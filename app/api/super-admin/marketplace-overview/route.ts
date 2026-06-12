@@ -3,13 +3,13 @@ import { getSuperAdminSessionFromRequest, appendSuperAdminAudit } from '@/lib/se
 import { listMarketplaceItems, updateMarketplaceItemStatus, deleteMarketplaceItem } from '@/lib/server/template-marketplace';
 import { getStoredUsers } from '@/lib/server/auth';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
 
     if (!itemId) return NextResponse.json({ error: 'itemId required' }, { status: 400 });
 
-    appendSuperAdminAudit({
+    await appendSuperAdminAudit({
       action: `marketplace_${action}`,
       targetType: 'marketplace_item',
       targetId: itemId,

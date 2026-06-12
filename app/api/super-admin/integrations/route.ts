@@ -3,16 +3,16 @@ import { getSuperAdminSessionFromRequest, appendSuperAdminAudit } from '@/lib/se
 import { getIntegrationsConfig, saveIntegrationsConfig } from '@/lib/server/super-admin-integrations';
 import crypto from 'crypto';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const cfg = getIntegrationsConfig();
+  const cfg = await getIntegrationsConfig();
   // Scrub secrets in response
   return NextResponse.json({
     googleAnalytics: {
@@ -50,31 +50,31 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const { action, data } = await req.json();
 
-    appendSuperAdminAudit({ action: `integration_${action}`, details: { keys: data ? Object.keys(data) : [] }, ip: req.headers.get('x-forwarded-for') || undefined });
+    await appendSuperAdminAudit({ action: `integration_${action}`, details: { keys: data ? Object.keys(data) : [] }, ip: req.headers.get('x-forwarded-for') || undefined });
 
     if (action === 'update_google_analytics') {
-      saveIntegrationsConfig({ googleAnalytics: { ...getIntegrationsConfig().googleAnalytics, ...data } });
+      await saveIntegrationsConfig({ googleAnalytics: { ...(await getIntegrationsConfig()).googleAnalytics, ...data } });
       return NextResponse.json({ success: true });
     }
 
     if (action === 'update_razorpay') {
-      saveIntegrationsConfig({ razorpay: { ...getIntegrationsConfig().razorpay, ...data } });
+      await saveIntegrationsConfig({ razorpay: { ...(await getIntegrationsConfig()).razorpay, ...data } });
       return NextResponse.json({ success: true });
     }
 
     if (action === 'update_slack') {
-      saveIntegrationsConfig({ slack: { ...getIntegrationsConfig().slack, ...data } });
+      await saveIntegrationsConfig({ slack: { ...(await getIntegrationsConfig()).slack, ...data } });
       return NextResponse.json({ success: true });
     }
 
     if (action === 'test_slack') {
-      const cfg = getIntegrationsConfig();
+      const cfg = await getIntegrationsConfig();
       if (!cfg.slack.enabled || !cfg.slack.webhookUrl) return NextResponse.json({ error: 'Slack not configured' }, { status: 400 });
       const res = await fetch(cfg.slack.webhookUrl, {
         method: 'POST',
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'test_google_analytics') {
-      const cfg = getIntegrationsConfig();
+      const cfg = await getIntegrationsConfig();
       if (!cfg.googleAnalytics.measurementId || !cfg.googleAnalytics.apiSecret) return NextResponse.json({ error: 'GA not configured' }, { status: 400 });
       const res = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${cfg.googleAnalytics.measurementId}&api_secret=${cfg.googleAnalytics.apiSecret}`, {
         method: 'POST',
@@ -96,23 +96,23 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'add_webhook') {
-      const cfg = getIntegrationsConfig();
+      const cfg = await getIntegrationsConfig();
       const webhook = { id: `wh-${Date.now()}`, url: data.url, label: data.label || 'Webhook', events: data.events || [], enabled: true, secret: crypto.randomBytes(20).toString('hex'), createdAt: new Date().toISOString() };
       cfg.webhooks.push(webhook);
-      saveIntegrationsConfig({ webhooks: cfg.webhooks });
+      await saveIntegrationsConfig({ webhooks: cfg.webhooks });
       return NextResponse.json({ success: true, id: webhook.id });
     }
 
     if (action === 'delete_webhook') {
-      const cfg = getIntegrationsConfig();
-      saveIntegrationsConfig({ webhooks: cfg.webhooks.filter((w) => w.id !== data.id) });
+      const cfg = await getIntegrationsConfig();
+      await saveIntegrationsConfig({ webhooks: cfg.webhooks.filter((w) => w.id !== data.id) });
       return NextResponse.json({ success: true });
     }
 
     if (action === 'toggle_webhook') {
-      const cfg = getIntegrationsConfig();
+      const cfg = await getIntegrationsConfig();
       cfg.webhooks = cfg.webhooks.map((w) => w.id === data.id ? { ...w, enabled: !w.enabled } : w);
-      saveIntegrationsConfig({ webhooks: cfg.webhooks });
+      await saveIntegrationsConfig({ webhooks: cfg.webhooks });
       return NextResponse.json({ success: true });
     }
 

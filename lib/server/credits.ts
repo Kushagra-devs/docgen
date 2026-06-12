@@ -1,13 +1,9 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import crypto from 'crypto';
 import { getDbPool } from '@/lib/server/database';
 
 function uuidv4(): string {
   return crypto.randomUUID();
 }
-
-const CREDITS_FILE = path.join(process.cwd(), 'data', 'credits.json');
 
 export interface UserCredits {
   balance: number;
@@ -30,10 +26,6 @@ export interface UserCredits {
     createdAt: string;
   }>;
   dailyEarnLog: Record<string, string[]>;
-}
-
-interface CreditsStore {
-  users: Record<string, UserCredits>;
 }
 
 export const MILESTONES = [
@@ -74,23 +66,6 @@ function defaultUserCredits(): UserCredits {
     milestones: [], verified: false, transactions: [], dailyEarnLog: {},
   };
 }
-
-// ── JSON fallback ─────────────────────────────────────────────────────────────
-
-async function readCreditsStore(): Promise<CreditsStore> {
-  try {
-    const content = await fs.readFile(CREDITS_FILE, 'utf8');
-    return JSON.parse(content) as CreditsStore;
-  } catch {
-    return { users: {} };
-  }
-}
-
-async function writeCreditsStore(store: CreditsStore): Promise<void> {
-  await fs.writeFile(CREDITS_FILE, JSON.stringify(store, null, 2), 'utf8');
-}
-
-// ── DB helpers ────────────────────────────────────────────────────────────────
 
 async function dbGetUserCredits(userId: string): Promise<UserCredits | null> {
   const pool = getDbPool();
@@ -136,24 +111,15 @@ async function dbEnsureUser(userId: string): Promise<UserCredits> {
     `INSERT INTO user_credits (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING`,
     [userId]
   );
-  return (await dbGetUserCredits(userId))!;
+  return (await dbGetUserCredits(userId)) ?? defaultUserCredits();
 }
-
-// ── Public API ────────────────────────────────────────────────────────────────
 
 export async function getUserCredits(userId: string): Promise<UserCredits> {
   const pool = getDbPool();
-  if (pool) {
-    const existing = await dbGetUserCredits(userId);
-    if (existing) return existing;
-    return dbEnsureUser(userId);
-  }
-  const store = await readCreditsStore();
-  if (!store.users[userId]) {
-    store.users[userId] = defaultUserCredits();
-    await writeCreditsStore(store);
-  }
-  return store.users[userId];
+  if (!pool) return defaultUserCredits();
+  const existing = await dbGetUserCredits(userId);
+  if (existing) return existing;
+  return dbEnsureUser(userId);
 }
 
 export async function earnCredits(
@@ -163,45 +129,12 @@ export async function earnCredits(
   description?: string,
 ): Promise<UserCredits> {
   const pool = getDbPool();
+  if (!pool) return defaultUserCredits();
+
   const rule = CREDIT_RULES[reason];
   const today = getToday();
   const earnAmount = amount ?? rule?.amount ?? 1;
-
-  if (pool) {
-    const user = await getUserCredits(userId);
-
-    if (ONE_TIME_REASONS.has(reason) && user.transactions.some((t) => t.type === 'earn' && t.reason === reason)) {
-      return user;
-    }
-    if (rule?.dailyMax !== undefined) {
-      const countToday = (user.dailyEarnLog[today] ?? []).filter((r) => r === reason).length;
-      if (countToday >= rule.dailyMax) return user;
-    }
-    if (reason === 'profile_view') {
-      const viewsToday = (user.dailyEarnLog[today] ?? []).filter((r) => r === reason).length;
-      if (viewsToday >= 10) return user;
-    }
-
-    const txId = uuidv4();
-    const newLog = { ...user.dailyEarnLog };
-    if (!newLog[today]) newLog[today] = [];
-    newLog[today] = [...newLog[today], reason];
-
-    await pool.query(
-      `UPDATE user_credits SET balance = balance + $1, total_earned = total_earned + $1, daily_earn_log = $2::jsonb, updated_at = NOW() WHERE user_id = $3`,
-      [earnAmount, JSON.stringify(newLog), userId]
-    );
-    await pool.query(
-      `INSERT INTO credit_transactions (id, user_id, type, amount, reason, description) VALUES ($1,$2,'earn',$3,$4,$5)`,
-      [txId, userId, earnAmount, reason, description ?? reason]
-    );
-    return (await dbGetUserCredits(userId))!;
-  }
-
-  // JSON fallback
-  const store = await readCreditsStore();
-  if (!store.users[userId]) store.users[userId] = defaultUserCredits();
-  const user = store.users[userId];
+  const user = await getUserCredits(userId);
 
   if (ONE_TIME_REASONS.has(reason) && user.transactions.some((t) => t.type === 'earn' && t.reason === reason)) {
     return user;
@@ -215,113 +148,76 @@ export async function earnCredits(
     if (viewsToday >= 10) return user;
   }
 
-  const transaction = { id: uuidv4(), type: 'earn' as const, amount: earnAmount, reason, description: description ?? reason, createdAt: new Date().toISOString() };
-  user.transactions.push(transaction);
-  user.balance += earnAmount;
-  user.totalEarned += earnAmount;
-  if (!user.dailyEarnLog[today]) user.dailyEarnLog[today] = [];
-  user.dailyEarnLog[today].push(reason);
-  store.users[userId] = user;
-  await writeCreditsStore(store);
-  return user;
+  const txId = uuidv4();
+  const newLog = { ...user.dailyEarnLog };
+  if (!newLog[today]) newLog[today] = [];
+  newLog[today] = [...newLog[today], reason];
+
+  await pool.query(
+    `UPDATE user_credits SET balance = balance + $1, total_earned = total_earned + $1, daily_earn_log = $2::jsonb, updated_at = NOW() WHERE user_id = $3`,
+    [earnAmount, JSON.stringify(newLog), userId]
+  );
+  await pool.query(
+    `INSERT INTO credit_transactions (id, user_id, type, amount, reason, description) VALUES ($1,$2,'earn',$3,$4,$5)`,
+    [txId, userId, earnAmount, reason, description ?? reason]
+  );
+  return (await dbGetUserCredits(userId)) ?? defaultUserCredits();
 }
 
 export async function spendCredits(userId: string, amount: number, reason: string): Promise<UserCredits> {
   const pool = getDbPool();
+  if (!pool) return defaultUserCredits();
 
-  if (pool) {
-    const user = await getUserCredits(userId);
-    if (user.balance < amount) throw new Error(`Insufficient credits. Balance: ${user.balance}, Required: ${amount}`);
-    const txId = uuidv4();
-    await pool.query(
-      `UPDATE user_credits SET balance = balance - $1, total_spent = total_spent + $1, updated_at = NOW() WHERE user_id = $2`,
-      [amount, userId]
-    );
-    await pool.query(
-      `INSERT INTO credit_transactions (id, user_id, type, amount, reason, description) VALUES ($1,$2,'spend',$3,$4,$4)`,
-      [txId, userId, amount, reason]
-    );
-    return (await dbGetUserCredits(userId))!;
-  }
-
-  const store = await readCreditsStore();
-  if (!store.users[userId]) store.users[userId] = defaultUserCredits();
-  const user = store.users[userId];
+  const user = await getUserCredits(userId);
   if (user.balance < amount) throw new Error(`Insufficient credits. Balance: ${user.balance}, Required: ${amount}`);
-  const transaction = { id: uuidv4(), type: 'spend' as const, amount, reason, description: reason, createdAt: new Date().toISOString() };
-  user.transactions.push(transaction);
-  user.balance -= amount;
-  user.totalSpent += amount;
-  store.users[userId] = user;
-  await writeCreditsStore(store);
-  return user;
+  const txId = uuidv4();
+  await pool.query(
+    `UPDATE user_credits SET balance = balance - $1, total_spent = total_spent + $1, updated_at = NOW() WHERE user_id = $2`,
+    [amount, userId]
+  );
+  await pool.query(
+    `INSERT INTO credit_transactions (id, user_id, type, amount, reason, description) VALUES ($1,$2,'spend',$3,$4,$4)`,
+    [txId, userId, amount, reason]
+  );
+  return (await dbGetUserCredits(userId)) ?? defaultUserCredits();
 }
 
 export async function recordPost(userId: string): Promise<UserCredits> {
   const pool = getDbPool();
+  if (!pool) return defaultUserCredits();
+
   const today = getToday();
+  await dbEnsureUser(userId);
+  const ucRow = await pool.query<Record<string, unknown>>(
+    `SELECT streak_current, streak_longest, streak_last_post_date, milestones FROM user_credits WHERE user_id = $1`,
+    [userId]
+  );
+  const r = ucRow.rows[0];
+  const lastPostDate = r.streak_last_post_date as string | null;
 
-  if (pool) {
-    await dbEnsureUser(userId);
-    const ucRow = await pool.query<Record<string, unknown>>(`SELECT streak_current, streak_longest, streak_last_post_date, milestones FROM user_credits WHERE user_id = $1`, [userId]);
-    const r = ucRow.rows[0];
-    const lastPostDate = r.streak_last_post_date as string | null;
-
-    if (lastPostDate === today) return (await dbGetUserCredits(userId))!;
-
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().slice(0, 10);
-
-    let newCurrent = lastPostDate === yesterdayStr ? (r.streak_current as number) + 1 : 1;
-    const newLongest = Math.max(newCurrent, r.streak_longest as number);
-    const newStartDate = lastPostDate === yesterdayStr ? undefined : today;
-
-    await pool.query(
-      `UPDATE user_credits SET streak_current=$1, streak_longest=$2, streak_last_post_date=$3${newStartDate ? ', streak_start_date=$5' : ''}, updated_at=NOW() WHERE user_id=$4`,
-      newStartDate ? [newCurrent, newLongest, today, userId, newStartDate] : [newCurrent, newLongest, today, userId]
-    );
-
-    await earnCredits(userId, 'daily_post', 5, 'Daily post reward');
-
-    const milestones = (r.milestones as string[]) ?? [];
-    if (newCurrent >= 30 && !milestones.includes('streak_30')) await _grantMilestone(userId, 'streak_30');
-    else if (newCurrent >= 10 && !milestones.includes('streak_10')) await _grantMilestone(userId, 'streak_10');
-    else if (newCurrent >= 7 && !milestones.includes('streak_7')) await _grantMilestone(userId, 'streak_7');
-
-    return (await dbGetUserCredits(userId))!;
-  }
-
-  const store = await readCreditsStore();
-  if (!store.users[userId]) store.users[userId] = defaultUserCredits();
-  const user = store.users[userId];
-
-  if (user.streak.lastPostDate === today) { store.users[userId] = user; await writeCreditsStore(store); return user; }
+  if (lastPostDate === today) return (await dbGetUserCredits(userId)) ?? defaultUserCredits();
 
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = yesterday.toISOString().slice(0, 10);
 
-  if (user.streak.lastPostDate === yesterdayStr) {
-    user.streak.current += 1;
-  } else {
-    user.streak.current = 1;
-    user.streak.streakStartDate = today;
-  }
-  if (user.streak.current > user.streak.longest) user.streak.longest = user.streak.current;
-  user.streak.lastPostDate = today;
-  store.users[userId] = user;
-  await writeCreditsStore(store);
+  const newCurrent = lastPostDate === yesterdayStr ? (r.streak_current as number) + 1 : 1;
+  const newLongest = Math.max(newCurrent, r.streak_longest as number);
+  const newStartDate = lastPostDate === yesterdayStr ? undefined : today;
+
+  await pool.query(
+    `UPDATE user_credits SET streak_current=$1, streak_longest=$2, streak_last_post_date=$3${newStartDate ? ', streak_start_date=$5' : ''}, updated_at=NOW() WHERE user_id=$4`,
+    newStartDate ? [newCurrent, newLongest, today, userId, newStartDate] : [newCurrent, newLongest, today, userId]
+  );
 
   await earnCredits(userId, 'daily_post', 5, 'Daily post reward');
 
-  const currentStreak = user.streak.current;
-  if (currentStreak >= 30 && !user.milestones.includes('streak_30')) await _grantMilestone(userId, 'streak_30');
-  else if (currentStreak >= 10 && !user.milestones.includes('streak_10')) await _grantMilestone(userId, 'streak_10');
-  else if (currentStreak >= 7 && !user.milestones.includes('streak_7')) await _grantMilestone(userId, 'streak_7');
+  const milestones = (r.milestones as string[]) ?? [];
+  if (newCurrent >= 30 && !milestones.includes('streak_30')) await _grantMilestone(userId, 'streak_30');
+  else if (newCurrent >= 10 && !milestones.includes('streak_10')) await _grantMilestone(userId, 'streak_10');
+  else if (newCurrent >= 7 && !milestones.includes('streak_7')) await _grantMilestone(userId, 'streak_7');
 
-  const finalStore = await readCreditsStore();
-  return finalStore.users[userId];
+  return (await dbGetUserCredits(userId)) ?? defaultUserCredits();
 }
 
 async function _grantMilestone(userId: string, milestoneId: string): Promise<void> {
@@ -329,48 +225,30 @@ async function _grantMilestone(userId: string, milestoneId: string): Promise<voi
   if (!milestone) return;
 
   const pool = getDbPool();
+  if (!pool) return;
 
-  if (pool) {
-    const ucRow = await pool.query<{ milestones: string[]; verified: boolean }>(
-      `SELECT milestones, verified FROM user_credits WHERE user_id = $1`, [userId]
-    );
-    if (!ucRow.rows[0]) return;
-    const milestones = ucRow.rows[0].milestones ?? [];
-    if (milestones.includes(milestoneId)) return;
+  const ucRow = await pool.query<{ milestones: string[]; verified: boolean }>(
+    `SELECT milestones, verified FROM user_credits WHERE user_id = $1`, [userId]
+  );
+  if (!ucRow.rows[0]) return;
+  const milestones = ucRow.rows[0].milestones ?? [];
+  if (milestones.includes(milestoneId)) return;
 
-    const newMilestones = [...milestones, milestoneId];
-    const grantsVerified = 'grantsVerified' in milestone && milestone.grantsVerified;
-    await pool.query(
-      `UPDATE user_credits SET milestones=$1::jsonb${grantsVerified ? ', verified=TRUE' : ''}, updated_at=NOW() WHERE user_id=$2`,
-      [JSON.stringify(newMilestones), userId]
-    );
-    const txId = uuidv4();
-    await pool.query(
-      `INSERT INTO credit_transactions (id, user_id, type, amount, reason, description) VALUES ($1,$2,'earn',$3,$4,$5)`,
-      [txId, userId, milestone.credits, milestoneId, `Milestone: ${milestone.title}`]
-    );
-    await pool.query(
-      `UPDATE user_credits SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW() WHERE user_id = $2`,
-      [milestone.credits, userId]
-    );
-    return;
-  }
-
-  const store = await readCreditsStore();
-  if (!store.users[userId]) return;
-  const user = store.users[userId];
-  if (user.milestones.includes(milestoneId)) return;
-  user.milestones.push(milestoneId);
-  if ('grantsVerified' in milestone && milestone.grantsVerified) user.verified = true;
-  const transaction = { id: uuidv4(), type: 'earn' as const, amount: milestone.credits, reason: milestoneId, description: `Milestone: ${milestone.title}`, createdAt: new Date().toISOString() };
-  user.transactions.push(transaction);
-  user.balance += milestone.credits;
-  user.totalEarned += milestone.credits;
-  const todayKey = getToday();
-  if (!user.dailyEarnLog[todayKey]) user.dailyEarnLog[todayKey] = [];
-  user.dailyEarnLog[todayKey].push(milestoneId);
-  store.users[userId] = user;
-  await writeCreditsStore(store);
+  const newMilestones = [...milestones, milestoneId];
+  const grantsVerified = 'grantsVerified' in milestone && milestone.grantsVerified;
+  await pool.query(
+    `UPDATE user_credits SET milestones=$1::jsonb${grantsVerified ? ', verified=TRUE' : ''}, updated_at=NOW() WHERE user_id=$2`,
+    [JSON.stringify(newMilestones), userId]
+  );
+  const txId = uuidv4();
+  await pool.query(
+    `INSERT INTO credit_transactions (id, user_id, type, amount, reason, description) VALUES ($1,$2,'earn',$3,$4,$5)`,
+    [txId, userId, milestone.credits, milestoneId, `Milestone: ${milestone.title}`]
+  );
+  await pool.query(
+    `UPDATE user_credits SET balance = balance + $1, total_earned = total_earned + $1, updated_at = NOW() WHERE user_id = $2`,
+    [milestone.credits, userId]
+  );
 }
 
 export async function checkAndGrantMilestones(

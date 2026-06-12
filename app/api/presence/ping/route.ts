@@ -14,7 +14,7 @@ export async function POST() {
     const idx = users.findIndex(
       (u) => u.email.toLowerCase() === session.user!.email!.toLowerCase(),
     );
-    if (idx === -1) return NextResponse.json({ ok: false }, { status: 404 });
+    if (idx === -1) return NextResponse.json({ ok: true });
 
     users[idx] = { ...users[idx], lastActivityAt: new Date().toISOString() };
     await saveStoredUsers(users);

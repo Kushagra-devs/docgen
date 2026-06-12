@@ -3,13 +3,13 @@ import { getSuperAdminSessionFromRequest, appendSuperAdminAudit } from '@/lib/se
 import { getFileTransfers, saveFileTransfers } from '@/lib/server/file-transfers';
 import { SecureFileTransfer } from '@/types/document';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -66,13 +66,24 @@ export async function POST(req: NextRequest) {
       const all = await getFileTransfers();
       const filtered = all.filter((t) => (t as unknown as Record<string, string>).id !== transferId);
       await saveFileTransfers(filtered);
-      appendSuperAdminAudit({
+      await appendSuperAdminAudit({
         action: 'file_transfer_deleted',
         targetType: 'file_transfer',
         targetId: transferId,
         ip: req.headers.get('x-forwarded-for') || undefined,
       });
       return NextResponse.json({ success: true });
+    }
+
+    if (action === 'clear_all') {
+      await saveFileTransfers([]);
+      await appendSuperAdminAudit({
+        action: 'file_transfers_cleared',
+        targetType: 'file_transfer',
+        targetId: 'all',
+        ip: req.headers.get('x-forwarded-for') || undefined,
+      });
+      return NextResponse.json({ success: true, cleared: true });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

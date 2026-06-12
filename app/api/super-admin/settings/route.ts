@@ -3,13 +3,13 @@ import { getSuperAdminSessionFromRequest, appendSuperAdminAudit, getSuperAdminEm
 import { getAuthSettings, saveAuthSettings, getMailSettings, saveMailSettings } from '@/lib/server/settings';
 import { getStoredUsers } from '@/lib/server/auth';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json({
-      superAdminEmail: getSuperAdminEmail(),
+      superAdminEmail: await getSuperAdminEmail(),
       authSettings: safeAuthSettings,
       mailSettings: safeMailSettings,
       adminUsers,
@@ -62,13 +62,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const { action, data } = await req.json();
 
-    appendSuperAdminAudit({
+    await appendSuperAdminAudit({
       action: `settings_${action}`,
       details: { keys: data ? Object.keys(data) : [] },
       ip: req.headers.get('x-forwarded-for') || undefined,
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
 
     if (action === 'update_super_admin_email') {
       if (!data?.email) return NextResponse.json({ error: 'Email required' }, { status: 400 });
-      setSuperAdminEmail(data.email);
+      await setSuperAdminEmail(data.email);
       return NextResponse.json({ success: true });
     }
 

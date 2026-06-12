@@ -1,9 +1,6 @@
-import { readFileSync, writeFileSync } from 'fs';
-import path from 'path';
 import crypto from 'crypto';
 import { NextRequest } from 'next/server';
-
-const configPath = path.join(process.cwd(), 'data', 'super-admin-config.json');
+import { readJsonFile, writeJsonFile, superAdminConfigPath } from '@/lib/server/storage';
 
 export interface SuperAdminOtpSession {
   id: string;
@@ -53,44 +50,28 @@ export interface SuperAdminConfig {
   platformFlags: SuperAdminPlatformFlags;
 }
 
-function readConfig(): SuperAdminConfig {
-  try {
-    const raw = readFileSync(configPath, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return {
-      email: '',
-      otpSessions: [],
-      activeSessions: [],
-      auditLog: [],
-      platformFlags: {
-        maintenanceMode: false,
-        maintenanceMessage: '',
-        newSignupsEnabled: true,
-        publicGigsEnabled: true,
-        publicMarketplaceEnabled: true,
-        publicBlogEnabled: true,
-        globalBroadcast: null,
-      },
-    };
-  }
+const DEFAULT_CONFIG: SuperAdminConfig = {
+  email: '',
+  otpSessions: [],
+  activeSessions: [],
+  auditLog: [],
+  platformFlags: {
+    maintenanceMode: false,
+    maintenanceMessage: '',
+    newSignupsEnabled: true,
+    publicGigsEnabled: true,
+    publicMarketplaceEnabled: true,
+    publicBlogEnabled: true,
+    globalBroadcast: null,
+  },
+};
+
+async function readConfig(): Promise<SuperAdminConfig> {
+  return readJsonFile<SuperAdminConfig>(superAdminConfigPath, { ...DEFAULT_CONFIG });
 }
 
-function writeConfig(config: SuperAdminConfig) {
-  writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
-}
-
-export function getSuperAdminEmail(): string {
-  const envEmail = process.env.SUPER_ADMIN_EMAIL;
-  if (envEmail) return envEmail.trim().toLowerCase();
-  const cfg = readConfig();
-  return cfg.email?.trim().toLowerCase() || '';
-}
-
-export function setSuperAdminEmail(email: string) {
-  const cfg = readConfig();
-  cfg.email = email.trim().toLowerCase();
-  writeConfig(cfg);
+async function writeConfig(config: SuperAdminConfig): Promise<void> {
+  await writeJsonFile(superAdminConfigPath, config);
 }
 
 function hashOtp(otp: string, salt: string): string {
@@ -105,8 +86,21 @@ function generateToken(): string {
   return crypto.randomBytes(48).toString('hex');
 }
 
-export function createSuperAdminOtpSession(email: string): { sessionId: string; otp: string } {
-  const cfg = readConfig();
+export async function getSuperAdminEmail(): Promise<string> {
+  const envEmail = process.env.SUPER_ADMIN_EMAIL;
+  if (envEmail) return envEmail.trim().toLowerCase();
+  const cfg = await readConfig();
+  return cfg.email?.trim().toLowerCase() || '';
+}
+
+export async function setSuperAdminEmail(email: string): Promise<void> {
+  const cfg = await readConfig();
+  cfg.email = email.trim().toLowerCase();
+  await writeConfig(cfg);
+}
+
+export async function createSuperAdminOtpSession(email: string): Promise<{ sessionId: string; otp: string }> {
+  const cfg = await readConfig();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 10 * 60 * 1000);
   const otp = generateOtp();
@@ -117,7 +111,6 @@ export function createSuperAdminOtpSession(email: string): { sessionId: string; 
   cfg.otpSessions = cfg.otpSessions.filter(
     (s) => s.email !== email && new Date(s.expiresAt) > now
   );
-
   cfg.otpSessions.push({
     id: sessionId,
     email: email.toLowerCase(),
@@ -127,14 +120,13 @@ export function createSuperAdminOtpSession(email: string): { sessionId: string; 
     expiresAt: expiresAt.toISOString(),
     attempts: 0,
   });
-
   cfg.otpSessions = cfg.otpSessions.filter((s) => new Date(s.expiresAt) > now);
-  writeConfig(cfg);
+  await writeConfig(cfg);
   return { sessionId, otp };
 }
 
-export function verifySuperAdminOtp(sessionId: string, otp: string): { valid: boolean; email?: string; error?: string } {
-  const cfg = readConfig();
+export async function verifySuperAdminOtp(sessionId: string, otp: string): Promise<{ valid: boolean; email?: string; error?: string }> {
+  const cfg = await readConfig();
   const now = new Date();
   const session = cfg.otpSessions.find((s) => s.id === sessionId);
 
@@ -146,17 +138,17 @@ export function verifySuperAdminOtp(sessionId: string, otp: string): { valid: bo
   const hash = hashOtp(otp.trim(), session.otpSalt);
   if (hash !== session.otpHash) {
     session.attempts++;
-    writeConfig(cfg);
+    await writeConfig(cfg);
     return { valid: false, error: 'Invalid OTP' };
   }
 
   session.verifiedAt = now.toISOString();
-  writeConfig(cfg);
+  await writeConfig(cfg);
   return { valid: true, email: session.email };
 }
 
-export function createSuperAdminSession(email: string, req?: NextRequest): string {
-  const cfg = readConfig();
+export async function createSuperAdminSession(email: string, req?: NextRequest): Promise<string> {
+  const cfg = await readConfig();
   const token = generateToken();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 4 * 60 * 60 * 1000);
@@ -171,57 +163,57 @@ export function createSuperAdminSession(email: string, req?: NextRequest): strin
     userAgent: req?.headers.get('user-agent') || undefined,
   });
 
-  writeConfig(cfg);
+  await writeConfig(cfg);
   return token;
 }
 
-export function validateSuperAdminSession(token: string): { valid: boolean; email?: string } {
+export async function validateSuperAdminSession(token: string): Promise<{ valid: boolean; email?: string }> {
   if (!token) return { valid: false };
-  const cfg = readConfig();
+  const cfg = await readConfig();
   const now = new Date();
   const session = cfg.activeSessions.find((s) => s.token === token);
   if (!session || new Date(session.expiresAt) < now) return { valid: false };
   return { valid: true, email: session.email };
 }
 
-export function revokeSuperAdminSession(token: string) {
-  const cfg = readConfig();
+export async function revokeSuperAdminSession(token: string): Promise<void> {
+  const cfg = await readConfig();
   cfg.activeSessions = cfg.activeSessions.filter((s) => s.token !== token);
-  writeConfig(cfg);
+  await writeConfig(cfg);
 }
 
-export function getSuperAdminSessionFromRequest(req: NextRequest): { valid: boolean; email?: string } {
+export async function getSuperAdminSessionFromRequest(req: NextRequest): Promise<{ valid: boolean; email?: string }> {
   const token = req.cookies.get('sa_session')?.value || '';
   return validateSuperAdminSession(token);
 }
 
-export function appendSuperAdminAudit(entry: Omit<SuperAdminAuditEntry, 'id' | 'timestamp'>) {
-  const cfg = readConfig();
+export async function appendSuperAdminAudit(entry: Omit<SuperAdminAuditEntry, 'id' | 'timestamp'>): Promise<void> {
+  const cfg = await readConfig();
   cfg.auditLog.unshift({
     id: generateToken().slice(0, 16),
     timestamp: new Date().toISOString(),
     ...entry,
   });
   cfg.auditLog = cfg.auditLog.slice(0, 2000);
-  writeConfig(cfg);
+  await writeConfig(cfg);
 }
 
-export function getSuperAdminAuditLog(limit = 100): SuperAdminAuditEntry[] {
-  const cfg = readConfig();
+export async function getSuperAdminAuditLog(limit = 100): Promise<SuperAdminAuditEntry[]> {
+  const cfg = await readConfig();
   return cfg.auditLog.slice(0, limit);
 }
 
-export function getPlatformFlags(): SuperAdminPlatformFlags {
-  const cfg = readConfig();
+export async function getPlatformFlags(): Promise<SuperAdminPlatformFlags> {
+  const cfg = await readConfig();
   return cfg.platformFlags;
 }
 
-export function savePlatformFlags(flags: Partial<SuperAdminPlatformFlags>) {
-  const cfg = readConfig();
+export async function savePlatformFlags(flags: Partial<SuperAdminPlatformFlags>): Promise<void> {
+  const cfg = await readConfig();
   cfg.platformFlags = { ...cfg.platformFlags, ...flags };
-  writeConfig(cfg);
+  await writeConfig(cfg);
 }
 
-export function getSuperAdminConfig(): SuperAdminConfig {
+export async function getSuperAdminConfig(): Promise<SuperAdminConfig> {
   return readConfig();
 }

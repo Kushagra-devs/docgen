@@ -3,13 +3,13 @@ import { getSuperAdminSessionFromRequest, appendSuperAdminAudit } from '@/lib/se
 import { getHistoryEntries } from '@/lib/server/history';
 import { getCustomTemplatesFromRepository, saveCustomTemplatesToRepository } from '@/lib/server/repositories';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       const templates = await getCustomTemplatesFromRepository();
       const filtered = templates.filter((t) => t.id !== templateId);
       await saveCustomTemplatesToRepository(filtered);
-      appendSuperAdminAudit({ action: 'template_deleted', targetType: 'template', targetId: templateId, ip: req.headers.get('x-forwarded-for') || undefined });
+      await appendSuperAdminAudit({ action: 'template_deleted', targetType: 'template', targetId: templateId, ip: req.headers.get('x-forwarded-for') || undefined });
       return NextResponse.json({ success: true });
     }
 

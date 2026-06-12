@@ -12,13 +12,13 @@ const EXT_MAP: Record<string, string> = {
   'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
 };
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function POST(request: NextRequest) {
-  const session = guard(request);
+  const session = await guard(request);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {

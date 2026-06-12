@@ -4,8 +4,8 @@ import { getFeedModerationStats, moderatePublishedItem, ModerationAction } from 
 
 export const dynamic = 'force-dynamic';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
@@ -16,7 +16,7 @@ function origin(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const data = await getFeedModerationStats();
     return NextResponse.json(data);
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const sess = guard(req);
+  const sess = await guard(req);
   if (!sess) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {

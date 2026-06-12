@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSuperAdminSessionFromRequest } from '@/lib/server/super-admin-auth';
 import { getPresenceStats, ONLINE_THRESHOLD_MS, IDLE_THRESHOLD_MS, AWAY_THRESHOLD_MS } from '@/lib/server/presence';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
@@ -21,7 +21,7 @@ function ageLabel(ms: number) {
 }
 
 export async function GET(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {

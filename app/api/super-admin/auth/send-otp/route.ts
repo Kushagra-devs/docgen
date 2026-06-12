@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
-    const saEmail = getSuperAdminEmail();
+    const saEmail = await getSuperAdminEmail();
     if (!saEmail) {
       return NextResponse.json({ error: 'Super admin not configured. Set SUPER_ADMIN_EMAIL env or use /api/super-admin/setup.' }, { status: 503 });
     }
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ sessionId: 'noop', message: 'If that email is registered, an OTP has been sent.' });
     }
 
-    const { sessionId, otp } = createSuperAdminOtpSession(email.trim().toLowerCase());
+    const { sessionId, otp } = await createSuperAdminOtpSession(email.trim().toLowerCase());
 
     await sendTrackedMail({
       policyKey: 'otp_verification',

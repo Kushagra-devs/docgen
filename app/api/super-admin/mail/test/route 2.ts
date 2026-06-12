@@ -9,13 +9,13 @@ import { buildEmailChrome, escapeHtmlLite } from '@/lib/server/email-chrome';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function POST(req: NextRequest) {
-  const session = guard(req);
+  const session = await guard(req);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   let recipient: string | undefined;
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'SMTP connection failed';
     const hint = buildHint(message, settings.host, settings.port, settings.secure);
-    appendSuperAdminAudit({
+    await appendSuperAdminAudit({
       action: 'smtp_test_failed',
       details: { error: message, host: settings.host, port: settings.port },
       ip: req.headers.get('x-forwarded-for') || undefined,
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
   const verifyMs = Date.now() - startedAt;
 
   if (verifyOnly) {
-    appendSuperAdminAudit({
+    await appendSuperAdminAudit({
       action: 'smtp_test_verify_ok',
       details: { host: settings.host, port: settings.port, elapsedMs: verifyMs },
       ip: req.headers.get('x-forwarded-for') || undefined,
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Send failed';
     const hint = buildHint(message, settings.host, settings.port, settings.secure);
-    appendSuperAdminAudit({
+    await appendSuperAdminAudit({
       action: 'smtp_test_send_failed',
       details: { error: message, recipient, host: settings.host },
       ip: req.headers.get('x-forwarded-for') || undefined,
@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
 
   const totalMs = Date.now() - startedAt;
 
-  appendSuperAdminAudit({
+  await appendSuperAdminAudit({
     action: 'smtp_test_sent',
     details: { recipient, host: settings.host, port: settings.port, messageId, elapsedMs: totalMs },
     ip: req.headers.get('x-forwarded-for') || undefined,

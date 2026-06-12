@@ -10,19 +10,6 @@ import {
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 
-// ─── Supabase realtime (graceful if env vars missing) ────────────────────────
-let supabaseClient: ReturnType<typeof import('@supabase/supabase-js').createClient> | null = null;
-function getSupabase() {
-  if (supabaseClient) return supabaseClient;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-  if (!url || !key) return null;
-  try {
-    const { createBrowserClient } = require('@supabase/ssr') as typeof import('@supabase/ssr');
-    supabaseClient = createBrowserClient(url, key);
-    return supabaseClient;
-  } catch { return null; }
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -327,7 +314,8 @@ export default function ScratchpadCenter() {
 
   const myUserId  = useRef(uid());
   const myColor   = useRef(COLLAB_COLORS[Math.floor(Math.random() * COLLAB_COLORS.length)]);
-  const channelRef = useRef<any>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const collabRoomIdRef = useRef<string | null>(null);
   const [collabRoomId, setCollabRoomId] = useState<string | null>(null);
   const [collabActive, setCollabActive] = useState(false);
   const [collabUsers, setCollabUsers] = useState<CollabUser[]>([]);
@@ -376,14 +364,24 @@ export default function ScratchpadCenter() {
     updateBoard(activeBoard.id, { elements });
   }, [activeBoard, updateBoard]);
 
+  const sendEvent = useCallback((event: string, payload: unknown) => {
+    const roomId = collabRoomIdRef.current;
+    if (!roomId) return;
+    fetch(`/api/collab/${roomId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: myUserId.current, event, payload }),
+    }).catch(() => {});
+  }, []);
+
   const undo = useCallback(() => {
     if (!undoStack.length) return;
     const prev = undoStack[undoStack.length - 1];
     setRedoStack((r) => [...r, activeBoard.elements]);
     setUndoStack((u) => u.slice(0, -1));
     updateBoard(activeBoard.id, { elements: prev });
-    channelRef.current?.send({ type: 'broadcast', event: 'stroke_undo', payload: { userId: myUserId.current } });
-  }, [undoStack, activeBoard, updateBoard]);
+    sendEvent('stroke_undo', { userId: myUserId.current });
+  }, [undoStack, activeBoard, updateBoard, sendEvent]);
 
   const redo = useCallback(() => {
     if (!redoStack.length) return;
@@ -395,8 +393,8 @@ export default function ScratchpadCenter() {
 
   const clearBoard = useCallback(() => {
     pushElements([]);
-    channelRef.current?.send({ type: 'broadcast', event: 'board_clear', payload: { userId: myUserId.current } });
-  }, [pushElements]);
+    sendEvent('board_clear', { userId: myUserId.current });
+  }, [pushElements, sendEvent]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -464,13 +462,13 @@ export default function ScratchpadCenter() {
   const isShape    = (t: Tool) => ['line','arrow','rect','circle','triangle'].includes(t);
 
   const broadcastCursor = useCallback((cx: number, cy: number) => {
-    if (!channelRef.current || !collabActive) return;
+    if (!collabActive) return;
     if (cursorThrottleRef.current) return;
     cursorThrottleRef.current = setTimeout(() => {
       cursorThrottleRef.current = null;
-      channelRef.current?.send({ type: 'broadcast', event: 'cursor_move', payload: { userId: myUserId.current, x: cx, y: cy } });
+      sendEvent('cursor_move', { userId: myUserId.current, x: cx, y: cy });
     }, 40);
-  }, [collabActive]);
+  }, [collabActive, sendEvent]);
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     fgCanvasRef.current?.setPointerCapture(e.pointerId);
@@ -528,10 +526,10 @@ export default function ScratchpadCenter() {
     const el = currentElRef.current;
     const next = [...activeBoard.elements, el];
     pushElements(next);
-    channelRef.current?.send({ type: 'broadcast', event: 'stroke_add', payload: { element: el } });
+    sendEvent('stroke_add', { element: el });
     currentElRef.current = null;
     dirtyRef.current = true;
-  }, [isDrawing, activeBoard.elements, pushElements]);
+  }, [isDrawing, activeBoard.elements, pushElements, sendEvent]);
 
   const onWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
@@ -557,9 +555,9 @@ export default function ScratchpadCenter() {
       text: textValue, x: textInput.x, y: textInput.y, fontSize,
     };
     pushElements([...activeBoard.elements, el]);
-    channelRef.current?.send({ type: 'broadcast', event: 'stroke_add', payload: { element: el } });
+    sendEvent('stroke_add', { element: el });
     setTextInput(null); setTextValue('');
-  }, [textInput, textValue, color, opacity, fontSize, activeBoard.elements, pushElements]);
+  }, [textInput, textValue, color, opacity, fontSize, activeBoard.elements, pushElements, sendEvent]);
 
   const commitSticky = useCallback(() => {
     if (!stickyInput) { setStickyInput(null); return; }
@@ -568,88 +566,111 @@ export default function ScratchpadCenter() {
       text: stickyValue || 'Write something…', x: stickyInput.x, y: stickyInput.y, noteColor: stickyColor,
     };
     pushElements([...activeBoard.elements, el]);
-    channelRef.current?.send({ type: 'broadcast', event: 'stroke_add', payload: { element: el } });
+    sendEvent('stroke_add', { element: el });
     setStickyInput(null); setStickyValue('');
-  }, [stickyInput, stickyValue, stickyColor, opacity, activeBoard.elements, pushElements]);
+  }, [stickyInput, stickyValue, stickyColor, opacity, activeBoard.elements, pushElements, sendEvent]);
 
   // ── Real-time Collaboration ──────────────────────────────────────────────────
 
   const startCollaboration = useCallback(async (roomId: string, myName: string) => {
-    const sb = getSupabase();
-    if (!sb) { setCollabStatus('error'); return; }
-    if (channelRef.current) { await sb.removeChannel(channelRef.current); channelRef.current = null; }
+    if (eventSourceRef.current) { eventSourceRef.current.close(); eventSourceRef.current = null; }
     setCollabStatus('connecting');
     setCollabRoomId(roomId);
-    const channel = sb.channel(`scratchpad-room:${roomId}`, {
-      config: { broadcast: { self: false, ack: false }, presence: { key: myUserId.current } },
-    });
-    channel.on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState<{ name: string; color: string }>();
-      const users: CollabUser[] = Object.entries(state).map(([userId, presences]) => {
-        const p = (presences as any[])[0] || {};
-        return { userId, name: p.name || 'User', color: p.color || '#6366f1', cursor: null, online: true };
-      });
-      setCollabUsers(users);
-    });
-    channel.on('presence', { event: 'join' }, () => {
-      const seq = ++lastSyncSeqRef.current;
-      channel.send({ type: 'broadcast', event: 'board_sync', payload: { elements: activeBoard.elements, from: myUserId.current, seq } });
-    });
-    channel.on('presence', { event: 'leave' }, ({ leftPresences }: any) => {
-      const leftIds = new Set((leftPresences as any[]).map((p: any) => p.key || p.userId));
-      setRemoteCursors((prev) => { const next = { ...prev }; leftIds.forEach((id: string) => delete next[id]); return next; });
-    });
-    channel.on('broadcast', { event: 'stroke_add' }, ({ payload }: any) => {
-      setBoards((prev) => prev.map((b) => b.id === activeBoardId ? { ...b, elements: [...b.elements, payload.element], updatedAt: Date.now() } : b));
-      dirtyRef.current = true;
-    });
-    channel.on('broadcast', { event: 'stroke_undo' }, ({ payload }: any) => {
-      setBoards((prev) => prev.map((b) => {
-        if (b.id !== activeBoardId) return b;
-        const idx = [...b.elements].reverse().findIndex((el) => el.ownerId === payload.userId);
-        if (idx === -1) return b;
-        return { ...b, elements: b.elements.filter((_, i) => i !== b.elements.length - 1 - idx), updatedAt: Date.now() };
-      }));
-      dirtyRef.current = true;
-    });
-    channel.on('broadcast', { event: 'board_clear' }, () => {
-      setBoards((prev) => prev.map((b) => b.id === activeBoardId ? { ...b, elements: [], updatedAt: Date.now() } : b));
-      dirtyRef.current = true;
-    });
-    channel.on('broadcast', { event: 'board_sync' }, ({ payload }: any) => {
-      if (payload.from === myUserId.current || payload.seq <= lastSyncSeqRef.current) return;
-      lastSyncSeqRef.current = payload.seq;
-      setBoards((prev) => prev.map((b) =>
-        b.id === activeBoardId && b.elements.length < payload.elements.length
-          ? { ...b, elements: payload.elements, updatedAt: Date.now() } : b
-      ));
-      dirtyRef.current = true;
-    });
-    channel.on('broadcast', { event: 'cursor_move' }, ({ payload }: any) => {
-      setRemoteCursors((prev) => ({
-        ...prev,
-        [payload.userId]: { x: payload.x, y: payload.y, name: prev[payload.userId]?.name || 'User', color: prev[payload.userId]?.color || '#6366f1' },
-      }));
-    });
-    channel.on('broadcast', { event: 'cursor_leave' }, ({ payload }: any) => {
-      setRemoteCursors((prev) => { const n = { ...prev }; delete n[payload.userId]; return n; });
-    });
-    await channel.subscribe(async (status: string) => {
-      if (status === 'SUBSCRIBED') {
-        await channel.track({ name: myName, color: myColor.current });
-        setCollabStatus('connected'); setCollabActive(true);
-      } else if (status === 'CHANNEL_ERROR') { setCollabStatus('error'); }
-    });
-    channelRef.current = channel;
-  }, [activeBoard.elements, activeBoardId]);
+    collabRoomIdRef.current = roomId;
 
-  const stopCollaboration = useCallback(async () => {
-    const sb = getSupabase();
-    if (channelRef.current && sb) {
-      channelRef.current.send({ type: 'broadcast', event: 'cursor_leave', payload: { userId: myUserId.current } });
-      await sb.removeChannel(channelRef.current);
-      channelRef.current = null;
+    const es = new EventSource(`/api/collab/${roomId}?userId=${encodeURIComponent(myUserId.current)}`);
+    eventSourceRef.current = es;
+
+    es.onopen = () => {
+      fetch(`/api/collab/${roomId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: myUserId.current, event: 'join', name: myName, color: myColor.current }),
+      }).catch(() => {});
+      setCollabStatus('connected');
+      setCollabActive(true);
+    };
+
+    es.onmessage = (e) => {
+      let parsed: { event: string; payload: any };
+      try { parsed = JSON.parse(e.data); } catch { return; }
+      const { event, payload } = parsed;
+
+      if (event === 'snapshot' || event === 'presence') {
+        setCollabUsers((payload.users as CollabUser[]).map((u) => ({ ...u, cursor: null, online: true })));
+        if (event === 'snapshot' && payload.elements?.length > 0) {
+          setBoards((prev) => prev.map((b) =>
+            b.id === activeBoardId && b.elements.length < payload.elements.length
+              ? { ...b, elements: payload.elements, updatedAt: Date.now() } : b
+          ));
+        }
+        return;
+      }
+      if (event === 'board_sync') {
+        if (payload.from === myUserId.current || payload.seq <= lastSyncSeqRef.current) return;
+        lastSyncSeqRef.current = payload.seq;
+        setBoards((prev) => prev.map((b) =>
+          b.id === activeBoardId && b.elements.length < payload.elements.length
+            ? { ...b, elements: payload.elements, updatedAt: Date.now() } : b
+        ));
+        dirtyRef.current = true;
+        return;
+      }
+      if (event === 'stroke_add') {
+        setBoards((prev) => prev.map((b) =>
+          b.id === activeBoardId ? { ...b, elements: [...b.elements, payload.element], updatedAt: Date.now() } : b
+        ));
+        dirtyRef.current = true;
+        return;
+      }
+      if (event === 'stroke_undo') {
+        setBoards((prev) => prev.map((b) => {
+          if (b.id !== activeBoardId) return b;
+          const idx = [...b.elements].reverse().findIndex((el) => el.ownerId === payload.userId);
+          if (idx === -1) return b;
+          return { ...b, elements: b.elements.filter((_, i) => i !== b.elements.length - 1 - idx), updatedAt: Date.now() };
+        }));
+        dirtyRef.current = true;
+        return;
+      }
+      if (event === 'board_clear') {
+        setBoards((prev) => prev.map((b) =>
+          b.id === activeBoardId ? { ...b, elements: [], updatedAt: Date.now() } : b
+        ));
+        dirtyRef.current = true;
+        return;
+      }
+      if (event === 'cursor_move') {
+        setRemoteCursors((prev) => ({
+          ...prev,
+          [payload.userId]: { x: payload.x, y: payload.y, name: prev[payload.userId]?.name || 'User', color: prev[payload.userId]?.color || '#6366f1' },
+        }));
+        return;
+      }
+      if (event === 'cursor_leave') {
+        setRemoteCursors((prev) => { const n = { ...prev }; delete n[payload.userId]; return n; });
+        return;
+      }
+    };
+
+    es.onerror = () => {
+      setCollabStatus('error');
+      es.close();
+      if (eventSourceRef.current === es) { eventSourceRef.current = null; }
+    };
+  }, [activeBoardId]);
+
+  const stopCollaboration = useCallback(() => {
+    const roomId = collabRoomIdRef.current;
+    if (roomId) {
+      fetch(`/api/collab/${roomId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: myUserId.current, event: 'leave' }),
+      }).catch(() => {});
     }
+    if (eventSourceRef.current) { eventSourceRef.current.close(); eventSourceRef.current = null; }
+    collabRoomIdRef.current = null;
     setCollabActive(false); setCollabRoomId(null); setCollabUsers([]); setRemoteCursors({}); setCollabStatus('idle');
   }, []);
 
@@ -934,7 +955,7 @@ export default function ScratchpadCenter() {
               onPointerUp={onPointerUp}
               onPointerLeave={() => {
                 onPointerUp();
-                channelRef.current?.send({ type: 'broadcast', event: 'cursor_leave', payload: { userId: myUserId.current } });
+                sendEvent('cursor_leave', { userId: myUserId.current });
               }}
               onWheel={onWheel}
             />
@@ -1352,7 +1373,7 @@ export default function ScratchpadCenter() {
                 )}
                 {collabStatus === 'error' && (
                   <div className="flex items-center gap-3 rounded-2xl px-4 py-3 bg-red-50 border border-red-100 text-sm text-red-600">
-                    <span className="shrink-0">⚠</span> Could not connect — check Supabase config.
+                    <span className="shrink-0">⚠</span> Could not connect — check your network or try again.
                   </div>
                 )}
 

@@ -55,13 +55,13 @@ function mergeConfig(stored: Partial<HomepageConfig> | null): HomepageConfig {
   };
 }
 
-function guard(req: NextRequest) {
-  const s = getSuperAdminSessionFromRequest(req);
+async function guard(req: NextRequest) {
+  const s = await getSuperAdminSessionFromRequest(req);
   return s.valid ? s : null;
 }
 
 export async function GET(req: NextRequest) {
-  if (!guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const stored = await readJsonFile<Partial<HomepageConfig> | null>(homepageConfigPath, null);
     return NextResponse.json({ config: mergeConfig(stored) });
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!await guard(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const body = await req.json().catch(() => ({})) as { config?: Partial<HomepageConfig> };
     const incoming = body.config ?? {};

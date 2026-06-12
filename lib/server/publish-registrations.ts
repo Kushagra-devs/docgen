@@ -1,65 +1,55 @@
-import fs from 'fs';
-import path from 'path';
-
-const FILE = path.join(process.cwd(), 'data', 'publish-registrations.json');
+import { readJsonFile, writeJsonFile, publishRegistrationsPath } from '@/lib/server/storage';
 
 export type RegistrationKind = 'event' | 'hackathon' | 'job' | 'survey' | 'poll' | 'webinar' | 'general';
 
 export interface PublishRegistration {
   id: string;
   kind: RegistrationKind;
-  // The published item details
   itemId: string;
   itemTitle: string;
   itemCategory: string;
-  publisherUserId: string;    // owner of the published post
-  // Registrant details
+  publisherUserId: string;
   registrantUserId?: string;
   registrantName: string;
   registrantEmail: string;
   registrantPhone?: string;
   registrantOrg?: string;
-  // Extra fields (notes, message, etc.)
   message?: string;
-  // Job-specific
   applicationUrl?: string;
   resumeUrl?: string;
-  // Status workflow
   status: 'pending' | 'shortlisted' | 'accepted' | 'rejected' | 'withdrawn';
   reviewNote?: string;
   reviewedAt?: string;
-  // Timestamps
   registeredAt: string;
   updatedAt: string;
 }
 
-function read(): PublishRegistration[] {
-  try { return JSON.parse(fs.readFileSync(FILE, 'utf8')) as PublishRegistration[]; }
-  catch { return []; }
+async function read(): Promise<PublishRegistration[]> {
+  return readJsonFile<PublishRegistration[]>(publishRegistrationsPath, []);
 }
 
-function write(items: PublishRegistration[]) {
-  fs.writeFileSync(FILE, JSON.stringify(items, null, 2));
+async function write(items: PublishRegistration[]): Promise<void> {
+  await writeJsonFile(publishRegistrationsPath, items);
 }
 
-export function getAllRegistrations(): PublishRegistration[] {
+export async function getAllRegistrations(): Promise<PublishRegistration[]> {
   return read();
 }
 
-export function getRegistrationsForItem(itemId: string): PublishRegistration[] {
-  return read().filter(r => r.itemId === itemId);
+export async function getRegistrationsForItem(itemId: string): Promise<PublishRegistration[]> {
+  return (await read()).filter(r => r.itemId === itemId);
 }
 
-export function getRegistrationsByPublisher(publisherUserId: string): PublishRegistration[] {
-  return read().filter(r => r.publisherUserId === publisherUserId);
+export async function getRegistrationsByPublisher(publisherUserId: string): Promise<PublishRegistration[]> {
+  return (await read()).filter(r => r.publisherUserId === publisherUserId);
 }
 
-export function getRegistrationsByUser(registrantUserId: string): PublishRegistration[] {
-  return read().filter(r => r.registrantUserId === registrantUserId);
+export async function getRegistrationsByUser(registrantUserId: string): Promise<PublishRegistration[]> {
+  return (await read()).filter(r => r.registrantUserId === registrantUserId);
 }
 
-export function findDuplicate(itemId: string, registrantUserId?: string, registrantEmail?: string): PublishRegistration | null {
-  const all = read();
+export async function findDuplicate(itemId: string, registrantUserId?: string, registrantEmail?: string): Promise<PublishRegistration | null> {
+  const all = await read();
   return all.find(r =>
     r.itemId === itemId &&
     (
@@ -69,8 +59,8 @@ export function findDuplicate(itemId: string, registrantUserId?: string, registr
   ) ?? null;
 }
 
-export function createRegistration(data: Omit<PublishRegistration, 'id' | 'registeredAt' | 'updatedAt' | 'status'>): PublishRegistration {
-  const all = read();
+export async function createRegistration(data: Omit<PublishRegistration, 'id' | 'registeredAt' | 'updatedAt' | 'status'>): Promise<PublishRegistration> {
+  const all = await read();
   const now = new Date().toISOString();
   const reg: PublishRegistration = {
     ...data,
@@ -79,34 +69,33 @@ export function createRegistration(data: Omit<PublishRegistration, 'id' | 'regis
     registeredAt: now,
     updatedAt: now,
   };
-  write([reg, ...all]);
+  await write([reg, ...all]);
   return reg;
 }
 
-export function updateRegistrationStatus(
+export async function updateRegistrationStatus(
   id: string,
   publisherUserId: string,
   status: PublishRegistration['status'],
   reviewNote?: string,
-): PublishRegistration | null {
-  const all = read();
+): Promise<PublishRegistration | null> {
+  const all = await read();
   const idx = all.findIndex(r => r.id === id && r.publisherUserId === publisherUserId);
   if (idx === -1) return null;
   all[idx] = { ...all[idx], status, reviewNote, reviewedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  write(all);
+  await write(all);
   return all[idx];
 }
 
-export function deleteRegistration(id: string, requestingUserId: string): boolean {
-  const all = read();
+export async function deleteRegistration(id: string, requestingUserId: string): Promise<boolean> {
+  const all = await read();
   const item = all.find(r => r.id === id);
   if (!item) return false;
   if (item.publisherUserId !== requestingUserId && item.registrantUserId !== requestingUserId) return false;
-  write(all.filter(r => r.id !== id));
+  await write(all.filter(r => r.id !== id));
   return true;
 }
 
-/* ── CSV export ── */
 export function registrationsToCSV(regs: PublishRegistration[]): string {
   const headers = ['ID','Item Title','Category','Kind','Name','Email','Phone','Organisation','Message','Status','Review Note','Registered At'];
   const rows = regs.map(r => [

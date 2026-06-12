@@ -15,7 +15,7 @@ export async function GET() {
     const users = await getStoredUsers();
     const storedUser = users.find((entry) => entry.email.toLowerCase() === sessionEmail.toLowerCase());
     if (!storedUser) {
-      return NextResponse.json({ error: 'Workspace user not found.' }, { status: 404 });
+      return NextResponse.json({ notifications: [], unreadCount: 0 });
     }
 
     const payload = await getWorkspaceNotifications(storedUser);
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const sessionEmail = session?.user?.email;
     if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const storedUser = await resolveUser(sessionEmail);
-    if (!storedUser) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+    if (!storedUser) return NextResponse.json({ notifications: [], unreadCount: 0 });
 
     const body = await request.json().catch(() => null);
     const ids = Array.isArray(body?.ids) ? body.ids.map(String) : [];
@@ -59,7 +59,7 @@ export async function PATCH(request: NextRequest) {
     const sessionEmail = session?.user?.email;
     if (!sessionEmail) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const storedUser = await resolveUser(sessionEmail);
-    if (!storedUser) return NextResponse.json({ error: 'User not found.' }, { status: 404 });
+    if (!storedUser) return NextResponse.json({ notifications: [], unreadCount: 0 });
 
     const { notifications } = await getWorkspaceNotifications(storedUser);
     const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
