@@ -32,7 +32,8 @@
       "Bash(psql \"postgres://a409ae33c3bf0583136a6f95f2eaebc6b8038c31e20034ea775281ce3d1e4909:sk_EHaVqB6MXs2tQn8WZtIqb@db.prisma.io:5432/postgres?sslmode=require\" -c \"DELETE FROM file_transfers; DELETE FROM app_state WHERE key LIKE '%file-transfer%'; SELECT 'done' AS result;\")",
       "Bash(Select-String -Path \"d:\\\\docrud_kushagra\\\\lib\\\\published-feed-data.ts\" -Pattern \"^\\\\];\")",
       "Bash(Select-Object -First 1 LineNumber)",
-      "PowerShell(\\(Select-String -Path \"d:\\\\docrud_kushagra\\\\lib\\\\published-feed-data.ts\" -Pattern \"^\\\\];\"\\).LineNumber)"
+      "PowerShell(\\(Select-String -Path \"d:\\\\docrud_kushagra\\\\lib\\\\published-feed-data.ts\" -Pattern \"^\\\\];\"\\).LineNumber)",
+      "Bash(git commit *)"
     ]
   }
 }
